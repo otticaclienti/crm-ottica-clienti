@@ -44,7 +44,8 @@ export default function Dashboard({ client }: { client: Client }) {
     const isAppuntamento = (n: string) => n.includes("appuntament");
     const isPresentato = (n: string) => n.includes("presentato") && !n.includes("preventivo");
     const isDisdetto = (n: string) => n.includes("disdett");
-    const isAccettato = (n: string) => n.includes("accettato");
+    // "Preventivo non accettato" contiene comunque "accettato": va escluso esplicitamente
+    const isAccettato = (n: string) => n.includes("accettato") && !n.includes("non accettato");
     const isTrattativa = (n: string) => n.includes("trattativa");
     const isErrato = (n: string) => n.includes("errato");
     const isTarget = (n: string) => n.includes("target");
