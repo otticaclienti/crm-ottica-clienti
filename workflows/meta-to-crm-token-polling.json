@@ -1,0 +1,97 @@
+{
+  "name": "Meta → CRM (token, senza login)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] }
+      },
+      "id": "sched",
+      "name": "Ogni 15 minuti",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tok",
+              "name": "token",
+              "value": "INCOLLA_QUI_IL_TOKEN",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config",
+      "name": "Config (incolla il token)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 300],
+      "notesInFlow": true,
+      "notes": "Incolla qui il token di accesso Meta al posto di INCOLLA_QUI_IL_TOKEN"
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v21.0/me/accounts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,leadgen_forms.limit(50){id,name,leads.limit(50){created_time,field_data}}"
+            },
+            { "name": "access_token", "value": "={{ $json.token }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get",
+      "name": "Leggi lead da Meta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Appiattisce Pagine -> Moduli -> Lead e normalizza i campi\nconst out = [];\nfor (const it of $input.all()) {\n  const pages = (it.json && it.json.data) || [];\n  for (const page of pages) {\n    const pageId = page.id;\n    const forms = (page.leadgen_forms && page.leadgen_forms.data) || [];\n    for (const form of forms) {\n      const leads = (form.leads && form.leads.data) || [];\n      for (const lead of leads) {\n        const flat = {};\n        for (const f of (lead.field_data || [])) {\n          const val = Array.isArray(f.values) ? f.values[0] : f.value;\n          flat[String(f.name || '').toLowerCase()] = val;\n        }\n        const pick = (terms) => {\n          for (const k of Object.keys(flat)) {\n            if (terms.some((t) => k.includes(t))) {\n              const v = flat[k];\n              if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();\n            }\n          }\n          return null;\n        };\n        const full = pick(['full name', 'nome e cognome', 'nome completo', 'nome', 'name']);\n        const first = pick(['first', 'nome']);\n        const last = pick(['last', 'cognome']);\n        const name = full || [first, last].filter(Boolean).join(' ') || null;\n        const phone = pick(['phone', 'telefono', 'cellulare', 'numero']);\n        const email = pick(['email', 'e-mail', 'mail']);\n        out.push({ json: { page_id: pageId, form_id: form.id, name, phone, email, created_time: lead.created_time } });\n      }\n    }\n  }\n}\nreturn out;"
+      },
+      "id": "flatten",
+      "name": "Prepara i lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://azexrewuoantizffdveo.supabase.co/functions/v1/ingest-lead",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "apikey", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6ZXhyZXd1b2FudGl6ZmZkdmVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0ODk5OTAsImV4cCI6MjEwMTA2NTk5MH0.4rrGX5A6hZuMg4-qQU6Eb10hErYAE8D1R0iEK9qmTB4" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ page_id: $json.page_id, form_id: $json.form_id, name: $json.name, phone: $json.phone, email: $json.email, source: 'Facebook' }) }}",
+        "options": { "batching": { "batch": { "batchSize": 1, "batchInterval": 200 } } }
+      },
+      "id": "send",
+      "name": "Invia al CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    }
+  ],
+  "connections": {
+    "Ogni 15 minuti": { "main": [[{ "node": "Config (incolla il token)", "type": "main", "index": 0 }]] },
+    "Config (incolla il token)": { "main": [[{ "node": "Leggi lead da Meta", "type": "main", "index": 0 }]] },
+    "Leggi lead da Meta": { "main": [[{ "node": "Prepara i lead", "type": "main", "index": 0 }]] },
+    "Prepara i lead": { "main": [[{ "node": "Invia al CRM", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
