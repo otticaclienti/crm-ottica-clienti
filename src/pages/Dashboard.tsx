@@ -2,9 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import type { Client, Lead, Stage } from "../types";
 
+interface AdMetrics {
+  spend: number; cpc: number; ctr: number; cpm: number;
+  leads_count: number; cost_per_lead: number; updated_at: string;
+}
+
 export default function Dashboard({ client }: { client: Client }) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [ads, setAds] = useState<AdMetrics | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -12,9 +18,11 @@ export default function Dashboard({ client }: { client: Client }) {
     Promise.all([
       supabase.from("stages").select("*").eq("client_id", client.id).order("position"),
       supabase.from("leads").select("*").eq("client_id", client.id),
-    ]).then(([{ data: st }, { data: ld }]) => {
+      supabase.from("client_ad_metrics").select("*").eq("client_id", client.id).maybeSingle(),
+    ]).then(([{ data: st }, { data: ld }, { data: adm }]) => {
       setStages((st as Stage[]) ?? []);
       setLeads((ld as Lead[]) ?? []);
+      setAds((adm as AdMetrics) ?? null);
       setLoading(false);
     });
   }, [client.id]);
@@ -75,6 +83,7 @@ export default function Dashboard({ client }: { client: Client }) {
   if (loading) return <div className="center-msg">Caricamento dati…</div>;
 
   const eur = (n: number) => "€ " + n.toLocaleString("it-IT");
+  const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
   const maxStage = Math.max(1, ...m.byStage.map((s) => s.count));
 
   return (
@@ -108,15 +117,31 @@ export default function Dashboard({ client }: { client: Client }) {
         <Stat k="Valore totale pipeline" v={eur(m.valoreTot)} small />
       </div>
 
-      {/* Metriche Meta (fase 2) */}
-      <div className="panel" style={{ background: "#f8fafc", borderStyle: "dashed" }}>
-        <h2>Metriche Meta (spesa, CPC, CTR, costo/conversione)</h2>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          In arrivo: si collegano con il permesso <b>ads_read</b> sul token e
-          l'<b>ID account pubblicitario</b> di ogni cliente. Chiedi di attivarle
-          quando vuoi.
-        </p>
-      </div>
+      {/* Metriche Meta */}
+      {ads ? (
+        <div className="panel">
+          <h2>Metriche Meta · ultimi 30 giorni</h2>
+          <div className="cards-grid" style={{ marginBottom: 0 }}>
+            <Stat k="Importo speso" v={eur(Number(ads.spend))} small accent="#ea580c" />
+            <Stat k="Costo per conversione" v={eur(round2(ads.cost_per_lead))} small accent="#ea580c" />
+            <Stat k="CPC" v={eur(round2(ads.cpc))} small />
+            <Stat k="CTR" v={round2(ads.ctr) + "%"} small />
+          </div>
+          <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 10 }}>
+            Lead da Meta nel periodo: <b>{ads.leads_count}</b> · aggiornato il{" "}
+            {new Date(ads.updated_at).toLocaleString("it-IT")}
+          </div>
+        </div>
+      ) : (
+        <div className="panel" style={{ background: "#f8fafc", borderStyle: "dashed" }}>
+          <h2>Metriche Meta (spesa, CPC, CTR, costo/conversione)</h2>
+          <p style={{ color: "var(--muted)", margin: 0 }}>
+            Per questo cliente non è ancora collegato l'account pubblicitario
+            Meta. Impostalo in Amministrazione per vedere spesa, CPC, CTR e
+            costo/conversione.
+          </p>
+        </div>
+      )}
 
       {/* Lead per fase */}
       <div className="panel">

@@ -14,6 +14,7 @@ export interface Client {
   ghl_pipeline_id: string | null;
   meta_page_id: string | null;
   meta_form_id: string | null;
+  meta_ad_account_id: string | null;
   created_at: string;
 }
 

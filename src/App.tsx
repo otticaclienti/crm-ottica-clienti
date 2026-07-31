@@ -23,7 +23,7 @@ export default function App() {
     supabase
       .from("clients")
       .select(
-        "id, name, ingest_token, ghl_pipeline_id, meta_page_id, meta_form_id, created_at"
+        "id, name, ingest_token, ghl_pipeline_id, meta_page_id, meta_form_id, meta_ad_account_id, created_at"
       )
       .order("name")
       .then(({ data }) => {
@@ -141,7 +141,7 @@ export default function App() {
             supabase
               .from("clients")
               .select(
-        "id, name, ingest_token, ghl_pipeline_id, meta_page_id, meta_form_id, created_at"
+        "id, name, ingest_token, ghl_pipeline_id, meta_page_id, meta_form_id, meta_ad_account_id, created_at"
       )
               .order("name")
               .then(({ data }) => setClients((data as Client[]) ?? []));

@@ -197,6 +197,7 @@ function ConnectPanel({
 }) {
   const [pageId, setPageId] = useState(client.meta_page_id ?? "");
   const [formId, setFormId] = useState(client.meta_form_id ?? "");
+  const [adAccount, setAdAccount] = useState(client.meta_ad_account_id ?? "");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -204,6 +205,7 @@ function ConnectPanel({
   useEffect(() => {
     setPageId(client.meta_page_id ?? "");
     setFormId(client.meta_form_id ?? "");
+    setAdAccount(client.meta_ad_account_id ?? "");
     setSaved(false);
   }, [client.id]);
 
@@ -214,6 +216,7 @@ function ConnectPanel({
       .update({
         meta_page_id: pageId.trim() || null,
         meta_form_id: formId.trim() || null,
+        meta_ad_account_id: adAccount.trim() || null,
       })
       .eq("id", client.id);
     setBusy(false);
@@ -254,6 +257,15 @@ function ConnectPanel({
             placeholder="solo se vuoi distinguere per modulo"
           />
         </div>
+      </div>
+
+      <div className="field">
+        <label>ID Account pubblicitario Meta (per spesa, CPC, CTR)</label>
+        <input
+          value={adAccount}
+          onChange={(e) => setAdAccount(e.target.value)}
+          placeholder="es. 855734445329520"
+        />
       </div>
       <button className="btn primary" onClick={save} disabled={busy}>
         {saved ? "Salvato ✓" : busy ? "Salvo…" : "Salva collegamento Meta"}
