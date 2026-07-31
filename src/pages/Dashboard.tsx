@@ -10,11 +10,7 @@ export default function Dashboard({ client }: { client: Client }) {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      supabase
-        .from("stages")
-        .select("*")
-        .eq("client_id", client.id)
-        .order("position"),
+      supabase.from("stages").select("*").eq("client_id", client.id).order("position"),
       supabase.from("leads").select("*").eq("client_id", client.id),
     ]).then(([{ data: st }, { data: ld }]) => {
       setStages((st as Stage[]) ?? []);
@@ -23,77 +19,113 @@ export default function Dashboard({ client }: { client: Client }) {
     });
   }, [client.id]);
 
-  const stats = useMemo(() => {
-    const total = leads.length;
+  const m = useMemo(() => {
+    const stageById: Record<string, Stage> = {};
+    for (const s of stages) stageById[s.id] = s;
+    const nameOf = (l: Lead) => (stageById[l.stage_id]?.name || "").toLowerCase();
+
+    const countBy = (pred: (n: string) => boolean) =>
+      leads.filter((l) => pred(nameOf(l))).length;
+    const sumBy = (pred: (n: string) => boolean) =>
+      leads.filter((l) => pred(nameOf(l))).reduce((s, l) => s + (Number(l.value) || 0), 0);
+
     const now = new Date();
     const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const last30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
 
-    const newThisMonth = leads.filter(
-      (l) => new Date(l.created_at) >= startMonth
-    ).length;
-    const newLast30 = leads.filter(
-      (l) => new Date(l.created_at) >= last30
-    ).length;
-    const totalValue = leads.reduce((s, l) => s + (Number(l.value) || 0), 0);
-
-    const byStage = stages.map((s) => ({
-      label: s.name,
-      color: s.color || "#94a3b8",
-      count: leads.filter((l) => l.stage_id === s.id).length,
-    }));
-
-    const byAssigned = groupCount(
-      leads.map((l) => l.assigned_to || "— non assegnato")
-    );
-    const bySource = groupCount(leads.map((l) => l.source || "— sconosciuta"));
+    const isAppuntamento = (n: string) => n.includes("appuntament");
+    const isPresentato = (n: string) => n.includes("presentato") && !n.includes("preventivo");
+    const isDisdetto = (n: string) => n.includes("disdett");
+    const isAccettato = (n: string) => n.includes("accettato");
+    const isTrattativa = (n: string) => n.includes("trattativa");
+    const isErrato = (n: string) => n.includes("errato");
+    const isTarget = (n: string) => n.includes("target");
+    const isInteressato = (n: string) => n.includes("interessato");
+    const isRichiamare = (n: string) => n.includes("richiamare");
+    const isNonRisposta = (n: string) =>
+      n.includes("nuovi") || n.includes("non risposto") || n.includes("non risponde") || n.includes("errato");
 
     return {
-      total,
-      newThisMonth,
-      newLast30,
-      totalValue,
-      byStage,
-      byAssigned,
-      bySource,
+      total: leads.length,
+      newMonth: leads.filter((l) => new Date(l.created_at) >= startMonth).length,
+      new30: leads.filter((l) => new Date(l.created_at) >= last30).length,
+      appuntamenti: countBy(isAppuntamento),
+      presentati: countBy(isPresentato),
+      disdetti: countBy(isDisdetto),
+      accettatiN: countBy(isAccettato),
+      accettatiEur: sumBy(isAccettato),
+      trattativaN: countBy(isTrattativa),
+      trattativaEur: sumBy(isTrattativa),
+      errato: countBy(isErrato),
+      target: countBy(isTarget),
+      interessato: countBy(isInteressato),
+      richiamare: countBy(isRichiamare),
+      risposta: leads.length - countBy(isNonRisposta),
+      valoreTot: leads.reduce((s, l) => s + (Number(l.value) || 0), 0),
+      byStage: stages.map((s) => ({
+        label: s.name,
+        color: s.color || "#94a3b8",
+        count: leads.filter((l) => l.stage_id === s.id).length,
+      })),
+      byAssigned: groupCount(leads.map((l) => l.assigned_to || "— non assegnato")),
+      bySource: groupCount(leads.map((l) => l.source || "— sconosciuta")),
     };
   }, [leads, stages]);
 
   if (loading) return <div className="center-msg">Caricamento dati…</div>;
 
-  const maxStage = Math.max(1, ...stats.byStage.map((s) => s.count));
+  const eur = (n: number) => "€ " + n.toLocaleString("it-IT");
+  const maxStage = Math.max(1, ...m.byStage.map((s) => s.count));
 
   return (
     <div className="page">
       <h1>Dashboard · {client.name}</h1>
       <p className="sub">Riepilogo della pipeline in tempo reale.</p>
 
+      {/* KPI principali (stile GHL) */}
       <div className="cards-grid">
-        <Stat k="Lead totali" v={stats.total} />
-        <Stat k="Nuovi questo mese" v={stats.newThisMonth} />
-        <Stat k="Nuovi ultimi 30 giorni" v={stats.newLast30} />
-        <Stat
-          k="Valore totale pipeline"
-          v={"€ " + stats.totalValue.toLocaleString("it-IT")}
-          small
-        />
+        <Stat k="Contatti totali" v={m.total} />
+        <Stat k="Appuntamenti futuri" v={m.appuntamenti} />
+        <Stat k="Presentati" v={m.presentati} />
+        <Stat k="Disdetti" v={m.disdetti} />
+      </div>
+      <div className="cards-grid">
+        <Stat k="Preventivi accettati" v={m.accettatiN} accent="#16a34a" />
+        <Stat k="Importo accettati" v={eur(m.accettatiEur)} small accent="#16a34a" />
+        <Stat k="Preventivi in trattativa" v={m.trattativaN} accent="#059669" />
+        <Stat k="Importo trattative" v={eur(m.trattativaEur)} small accent="#059669" />
+      </div>
+      <div className="cards-grid">
+        <Stat k="Risposta" v={m.risposta} />
+        <Stat k="Da richiamare" v={m.richiamare} />
+        <Stat k="Numero errato" v={m.errato} />
+        <Stat k="Non interessato" v={m.interessato} />
+      </div>
+      <div className="cards-grid">
+        <Stat k="Non in target" v={m.target} />
+        <Stat k="Nuovi questo mese" v={m.newMonth} />
+        <Stat k="Nuovi ultimi 30 giorni" v={m.new30} />
+        <Stat k="Valore totale pipeline" v={eur(m.valoreTot)} small />
       </div>
 
+      {/* Metriche Meta (fase 2) */}
+      <div className="panel" style={{ background: "#f8fafc", borderStyle: "dashed" }}>
+        <h2>Metriche Meta (spesa, CPC, CTR, costo/conversione)</h2>
+        <p style={{ color: "var(--muted)", margin: 0 }}>
+          In arrivo: si collegano con il permesso <b>ads_read</b> sul token e
+          l'<b>ID account pubblicitario</b> di ogni cliente. Chiedi di attivarle
+          quando vuoi.
+        </p>
+      </div>
+
+      {/* Lead per fase */}
       <div className="panel">
         <h2>Lead per fase</h2>
-        {stats.byStage.map((s) => (
+        {m.byStage.map((s) => (
           <div className="bar-row" key={s.label}>
-            <div className="lbl" title={s.label}>
-              {s.label}
-            </div>
+            <div className="lbl" title={s.label}>{s.label}</div>
             <div className="bar-track">
-              <div
-                className="bar-fill"
-                style={{
-                  width: (s.count / maxStage) * 100 + "%",
-                  background: s.color,
-                }}
-              />
+              <div className="bar-fill" style={{ width: (s.count / maxStage) * 100 + "%", background: s.color }} />
             </div>
             <div className="num">{s.count}</div>
           </div>
@@ -103,48 +135,38 @@ export default function Dashboard({ client }: { client: Client }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
         <div className="panel" style={{ margin: 0 }}>
           <h2>Lead per segretaria</h2>
-          <BarList data={stats.byAssigned} color="#2563eb" />
+          <BarList data={m.byAssigned} color="#2563eb" />
         </div>
         <div className="panel" style={{ margin: 0 }}>
           <h2>Lead per fonte</h2>
-          <BarList data={stats.bySource} color="#7c3aed" />
+          <BarList data={m.bySource} color="#7c3aed" />
         </div>
       </div>
     </div>
   );
 }
 
-function Stat({ k, v, small }: { k: string; v: React.ReactNode; small?: boolean }) {
+function Stat({
+  k, v, small, accent,
+}: { k: string; v: React.ReactNode; small?: boolean; accent?: string }) {
   return (
     <div className="stat">
       <div className="k">{k}</div>
-      <div className={"v" + (small ? " small" : "")}>{v}</div>
+      <div className={"v" + (small ? " small" : "")} style={accent ? { color: accent } : undefined}>{v}</div>
     </div>
   );
 }
 
-function BarList({
-  data,
-  color,
-}: {
-  data: { label: string; count: number }[];
-  color: string;
-}) {
+function BarList({ data, color }: { data: { label: string; count: number }[]; color: string }) {
   const max = Math.max(1, ...data.map((d) => d.count));
-  if (data.length === 0)
-    return <div style={{ color: "var(--muted)" }}>Nessun dato.</div>;
+  if (data.length === 0) return <div style={{ color: "var(--muted)" }}>Nessun dato.</div>;
   return (
     <>
       {data.map((d) => (
         <div className="bar-row" key={d.label}>
-          <div className="lbl" title={d.label}>
-            {d.label}
-          </div>
+          <div className="lbl" title={d.label}>{d.label}</div>
           <div className="bar-track">
-            <div
-              className="bar-fill"
-              style={{ width: (d.count / max) * 100 + "%", background: color }}
-            />
+            <div className="bar-fill" style={{ width: (d.count / max) * 100 + "%", background: color }} />
           </div>
           <div className="num">{d.count}</div>
         </div>
@@ -154,9 +176,7 @@ function BarList({
 }
 
 function groupCount(arr: string[]): { label: string; count: number }[] {
-  const m: Record<string, number> = {};
-  for (const x of arr) m[x] = (m[x] || 0) + 1;
-  return Object.entries(m)
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count);
+  const map: Record<string, number> = {};
+  for (const x of arr) map[x] = (map[x] || 0) + 1;
+  return Object.entries(map).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
 }
