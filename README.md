@@ -9,6 +9,23 @@ richiesta.
 
 ---
 
+## ▶️ Pubblica l'app (1 click)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/otticaclienti/crm-ottica-clienti&project-name=crm-ottica&repository-name=crm-ottica)
+
+1. Clicca il pulsante qui sopra (o vai su **https://vercel.com/new** e importa il
+   repository `crm-ottica-clienti`).
+2. Accedi/registrati su Vercel con **GitHub** e autorizza l'accesso al
+   repository.
+3. Lascia tutte le impostazioni come sono (Framework: *Vite*) e clicca
+   **Deploy**.
+4. Dopo ~1 minuto avrai l'indirizzo dell'app. Entra con
+   **otticaclienti@gmail.com** / **OtticaCRM2026!**.
+
+Guida dettagliata con schermate: [`docs/GUIDA-DEPLOY-VERCEL.md`](docs/GUIDA-DEPLOY-VERCEL.md).
+
+---
+
 ## 🔑 I tuoi accessi (da conservare)
 
 | Cosa | Valore |
