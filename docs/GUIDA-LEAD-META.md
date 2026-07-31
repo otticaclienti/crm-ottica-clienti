@@ -28,22 +28,30 @@ Meta (Pagine dei clienti)  ──►  Funzione "pull-meta-leads" nel CRM  ──
   l'accesso ai lead di quella Pagina). Le Pagine non accessibili vengono
   semplicemente saltate.
 
-## ⚠️ Il token va reso PERMANENTE
+## Il token (già configurato)
 
-Il token generato con "Ricevi token" nella schermata dell'app dura poche ore.
-Per far funzionare tutto **in modo continuo** serve un **token di System User**
-(non scade mai):
+I clienti sono **partner** nel Portfolio, e Meta **non permette** di usare un
+"Utente di sistema" con token permanente sulle Pagine dei partner. Quindi usiamo
+il **token del tuo account** (che ha già accesso ai lead di tutte le Pagine):
 
-1. Vai su **business.facebook.com → Impostazioni business**.
-2. **Utenti → Utenti di sistema** → **Aggiungi** (es. "CRM Lettura Lead"),
-   ruolo Admin.
-3. **Aggiungi risorse**: assegna a questo utente di sistema le **Pagine** dei
-   clienti (con accesso ai lead) e l'**app "crm 1 oc"**.
-4. **Genera nuovo token** → app "crm 1 oc" → scadenza **Mai** → permessi:
-   `leads_retrieval`, `pages_show_list`, `pages_read_engagement`,
-   `pages_manage_ads`, `business_management`.
-5. Copia il token e sostituiscilo nel CRM (tabella `app_settings`, chiave
-   `meta_token`).
+- Il token è stato **allungato** a lunga durata (non scade) ed è salvato in
+  `app_settings.meta_token`.
+- Per ogni cliente salviamo anche la **chiave permanente della Pagina**
+  (`clients.meta_page_token`), che è la più stabile.
+
+### ⚠️ Rinnovo ogni ~90 giorni (regola di Meta)
+
+Meta impone che l'**accesso ai dati** venga ri-autorizzato ogni ~90 giorni
+(attualmente **fino al 29/10/2026**). Quando si avvicina la scadenza:
+
+1. Nell'app Meta → **Casi d'uso → Personalizza → Strumenti → Ricevi token**
+   (permessi: `leads_retrieval`, `pages_show_list`, `pages_read_engagement`,
+   `pages_manage_ads`, `business_management`) → copia il nuovo token.
+2. Salvalo nel CRM sovrascrivendo `app_settings.meta_token` e ri-allungalo con
+   l'App ID + App Secret (endpoint `oauth/access_token?grant_type=fb_exchange_token`).
+3. Aggiorna le chiavi Pagina (`clients.meta_page_token`) da `me/accounts`.
+
+(Se serve, chiedi assistenza: sono 3 comandi SQL, 2 minuti.)
 
 ## Aggiungere un nuovo cliente
 
