@@ -1,0 +1,57 @@
+{
+  "name": "Meta → CRM (auto-routing per Pagina)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-fb",
+      "name": "Nuovo Lead da Meta",
+      "type": "n8n-nodes-base.facebookLeadAdsTrigger",
+      "typeVersion": 1,
+      "position": [260, 300],
+      "webhookId": "meta-lead-crm",
+      "notesInFlow": true,
+      "notes": "Dopo l'import: seleziona la tua credenziale Meta, la Pagina e il Modulo del cliente."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalizza i campi del form Meta e passa page_id/form_id per l'auto-routing\nconst j = $input.item.json;\n\nfunction pick(obj, terms) {\n  for (const k of Object.keys(obj)) {\n    const kn = k.toLowerCase();\n    if (terms.some((t) => kn.includes(t))) {\n      const v = obj[k];\n      if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();\n    }\n  }\n  return null;\n}\n\n// Se arrivano in formato grezzo Meta (field_data), li appiattisce\nlet flat = { ...j };\nif (Array.isArray(j.field_data)) {\n  for (const f of j.field_data) {\n    const val = Array.isArray(f.values) ? f.values[0] : f.value;\n    flat[f.name] = val;\n  }\n}\n\nconst full = pick(flat, ['full name', 'nome e cognome', 'nome_completo', 'nome', 'name']);\nconst first = pick(flat, ['first', 'nome']);\nconst last = pick(flat, ['last', 'cognome']);\nconst name = full || [first, last].filter(Boolean).join(' ') || null;\nconst phone = pick(flat, ['phone', 'telefono', 'cellulare', 'numero']);\nconst email = pick(flat, ['email', 'e-mail', 'mail']);\n\n// ID Pagina / Modulo Meta: il CRM li usa per capire di quale cliente e' il lead\nconst page_id = pick(flat, ['page_id', 'pageid']) || j.page_id || null;\nconst form_id = pick(flat, ['form_id', 'formid']) || j.form_id || null;\n\nreturn [{ json: { name, phone, email, page_id, form_id } }];"
+      },
+      "id": "normalize",
+      "name": "Normalizza campi",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://azexrewuoantizffdveo.supabase.co/functions/v1/ingest-lead",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "apikey", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6ZXhyZXd1b2FudGl6ZmZkdmVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0ODk5OTAsImV4cCI6MjEwMTA2NTk5MH0.4rrGX5A6hZuMg4-qQU6Eb10hErYAE8D1R0iEK9qmTB4" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ page_id: $json.page_id, form_id: $json.form_id, name: $json.name, phone: $json.phone, email: $json.email, source: 'Facebook' }) }}",
+        "options": {}
+      },
+      "id": "send-crm",
+      "name": "Invia al CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 300]
+    }
+  ],
+  "connections": {
+    "Nuovo Lead da Meta": {
+      "main": [[{ "node": "Normalizza campi", "type": "main", "index": 0 }]]
+    },
+    "Normalizza campi": {
+      "main": [[{ "node": "Invia al CRM", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}
