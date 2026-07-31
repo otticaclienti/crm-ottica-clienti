@@ -1,5 +1,5 @@
 {
-  "name": "Meta → CRM (token, senza login)",
+  "name": "Meta → CRM (token v2)",
   "nodes": [
     {
       "parameters": {
@@ -15,12 +15,7 @@
       "parameters": {
         "assignments": {
           "assignments": [
-            {
-              "id": "tok",
-              "name": "token",
-              "value": "INCOLLA_QUI_IL_TOKEN",
-              "type": "string"
-            }
+            { "id": "tok", "name": "token", "value": "INCOLLA_QUI_IL_TOKEN", "type": "string" }
           ]
         },
         "options": {}
@@ -31,7 +26,7 @@
       "typeVersion": 3.4,
       "position": [220, 300],
       "notesInFlow": true,
-      "notes": "Incolla qui il token di accesso Meta al posto di INCOLLA_QUI_IL_TOKEN"
+      "notes": "Incolla il token Meta al posto di INCOLLA_QUI_IL_TOKEN"
     },
     {
       "parameters": {
@@ -39,30 +34,54 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            {
-              "name": "fields",
-              "value": "id,name,leadgen_forms.limit(50){id,name,leads.limit(50){created_time,field_data}}"
-            },
+            { "name": "fields", "value": "id,name,access_token" },
+            { "name": "limit", "value": "100" },
             { "name": "access_token", "value": "={{ $json.token }}" }
           ]
         },
         "options": {}
       },
-      "id": "get",
-      "name": "Leggi lead da Meta",
+      "id": "pages",
+      "name": "Elenca Pagine",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [440, 300]
     },
     {
+      "parameters": { "fieldToSplitOut": "data", "options": {} },
+      "id": "split",
+      "name": "Una Pagina per volta",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [660, 300]
+    },
+    {
       "parameters": {
-        "jsCode": "// Appiattisce Pagine -> Moduli -> Lead e normalizza i campi\nconst out = [];\nfor (const it of $input.all()) {\n  const pages = (it.json && it.json.data) || [];\n  for (const page of pages) {\n    const pageId = page.id;\n    const forms = (page.leadgen_forms && page.leadgen_forms.data) || [];\n    for (const form of forms) {\n      const leads = (form.leads && form.leads.data) || [];\n      for (const lead of leads) {\n        const flat = {};\n        for (const f of (lead.field_data || [])) {\n          const val = Array.isArray(f.values) ? f.values[0] : f.value;\n          flat[String(f.name || '').toLowerCase()] = val;\n        }\n        const pick = (terms) => {\n          for (const k of Object.keys(flat)) {\n            if (terms.some((t) => k.includes(t))) {\n              const v = flat[k];\n              if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();\n            }\n          }\n          return null;\n        };\n        const full = pick(['full name', 'nome e cognome', 'nome completo', 'nome', 'name']);\n        const first = pick(['first', 'nome']);\n        const last = pick(['last', 'cognome']);\n        const name = full || [first, last].filter(Boolean).join(' ') || null;\n        const phone = pick(['phone', 'telefono', 'cellulare', 'numero']);\n        const email = pick(['email', 'e-mail', 'mail']);\n        out.push({ json: { page_id: pageId, form_id: form.id, name, phone, email, created_time: lead.created_time } });\n      }\n    }\n  }\n}\nreturn out;"
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "fields", "value": "id,name,leadgen_forms.limit(50){id,name,leads.limit(25){created_time,field_data}}" },
+            { "name": "access_token", "value": "={{ $json.access_token }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "leads",
+      "name": "Leggi lead (chiave della Pagina)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Appiattisce (una Pagina per item) -> Moduli -> Lead e normalizza\nconst out = [];\nfor (const it of $input.all()) {\n  const page = it.json || {};\n  const pageId = page.id;\n  const forms = (page.leadgen_forms && page.leadgen_forms.data) || [];\n  for (const form of forms) {\n    const leads = (form.leads && form.leads.data) || [];\n    for (const lead of leads) {\n      const flat = {};\n      for (const f of (lead.field_data || [])) {\n        const val = Array.isArray(f.values) ? f.values[0] : f.value;\n        flat[String(f.name || '').toLowerCase()] = val;\n      }\n      const pick = (terms) => {\n        for (const k of Object.keys(flat)) {\n          if (terms.some((t) => k.includes(t))) {\n            const v = flat[k];\n            if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();\n          }\n        }\n        return null;\n      };\n      const full = pick(['full name', 'nome e cognome', 'nome completo', 'nome', 'name']);\n      const first = pick(['first', 'nome']);\n      const last = pick(['last', 'cognome']);\n      const name = full || [first, last].filter(Boolean).join(' ') || null;\n      const phone = pick(['phone', 'telefono', 'cellulare', 'numero']);\n      const email = pick(['email', 'e-mail', 'mail']);\n      out.push({ json: { page_id: pageId, page_name: page.name, form_id: form.id, name, phone, email, created_time: lead.created_time } });\n    }\n  }\n}\nreturn out;"
       },
       "id": "flatten",
       "name": "Prepara i lead",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 300]
+      "position": [1100, 300]
     },
     {
       "parameters": {
@@ -78,19 +97,21 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ page_id: $json.page_id, form_id: $json.form_id, name: $json.name, phone: $json.phone, email: $json.email, source: 'Facebook' }) }}",
-        "options": { "batching": { "batch": { "batchSize": 1, "batchInterval": 200 } } }
+        "options": {}
       },
       "id": "send",
       "name": "Invia al CRM",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [880, 300]
+      "position": [1320, 300]
     }
   ],
   "connections": {
     "Ogni 15 minuti": { "main": [[{ "node": "Config (incolla il token)", "type": "main", "index": 0 }]] },
-    "Config (incolla il token)": { "main": [[{ "node": "Leggi lead da Meta", "type": "main", "index": 0 }]] },
-    "Leggi lead da Meta": { "main": [[{ "node": "Prepara i lead", "type": "main", "index": 0 }]] },
+    "Config (incolla il token)": { "main": [[{ "node": "Elenca Pagine", "type": "main", "index": 0 }]] },
+    "Elenca Pagine": { "main": [[{ "node": "Una Pagina per volta", "type": "main", "index": 0 }]] },
+    "Una Pagina per volta": { "main": [[{ "node": "Leggi lead (chiave della Pagina)", "type": "main", "index": 0 }]] },
+    "Leggi lead (chiave della Pagina)": { "main": [[{ "node": "Prepara i lead", "type": "main", "index": 0 }]] },
     "Prepara i lead": { "main": [[{ "node": "Invia al CRM", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" }
