@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
-import type { Client, Lead, Stage } from "../types";
+import type { Client, Lead, Pipeline, Stage } from "../types";
 
 interface AdMetrics {
   spend: number; cpc: number; ctr: number; cpm: number;
   leads_count: number; cost_per_lead: number; updated_at: string;
 }
 
-export default function Dashboard({ client }: { client: Client }) {
+export default function Dashboard({
+  client,
+  pipeline,
+}: {
+  client: Client;
+  pipeline: Pipeline;
+}) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [ads, setAds] = useState<AdMetrics | null>(null);
@@ -16,16 +22,16 @@ export default function Dashboard({ client }: { client: Client }) {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      supabase.from("stages").select("*").eq("client_id", client.id).order("position"),
-      supabase.from("leads").select("*").eq("client_id", client.id),
-      supabase.from("client_ad_metrics").select("*").eq("client_id", client.id).maybeSingle(),
+      supabase.from("stages").select("*").eq("pipeline_id", pipeline.id).order("position"),
+      supabase.from("leads").select("*").eq("pipeline_id", pipeline.id),
+      supabase.from("client_ad_metrics").select("*").eq("pipeline_id", pipeline.id).maybeSingle(),
     ]).then(([{ data: st }, { data: ld }, { data: adm }]) => {
       setStages((st as Stage[]) ?? []);
       setLeads((ld as Lead[]) ?? []);
       setAds((adm as AdMetrics) ?? null);
       setLoading(false);
     });
-  }, [client.id]);
+  }, [pipeline.id]);
 
   const m = useMemo(() => {
     const stageById: Record<string, Stage> = {};
@@ -90,7 +96,9 @@ export default function Dashboard({ client }: { client: Client }) {
   return (
     <div className="page">
       <h1>Dashboard · {client.name}</h1>
-      <p className="sub">Riepilogo della pipeline in tempo reale.</p>
+      <p className="sub">
+        Pipeline: <b>{pipeline.name}</b> · riepilogo in tempo reale.
+      </p>
 
       {/* KPI principali (stile GHL) */}
       <div className="cards-grid">

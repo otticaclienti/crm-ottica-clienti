@@ -18,9 +18,20 @@ export interface Client {
   created_at: string;
 }
 
+export interface Pipeline {
+  id: string;
+  client_id: string;
+  name: string;
+  position: number;
+  meta_form_id: string | null;
+  meta_ad_account_id: string | null;
+  created_at: string;
+}
+
 export interface Stage {
   id: string;
   client_id: string;
+  pipeline_id: string;
   name: string;
   position: number;
   color: string | null;
@@ -31,6 +42,7 @@ export interface Stage {
 export interface Lead {
   id: string;
   client_id: string;
+  pipeline_id: string | null;
   stage_id: string;
   name: string | null;
   phone: string | null;

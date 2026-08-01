@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase, INGEST_FN_URL } from "../supabaseClient";
-import type { Client, Stage } from "../types";
+import type { Client, Pipeline, Stage } from "../types";
 
 /* Chiamata alla funzione protetta che gestisce gli utenti */
 async function callAdmin(action: string, payload: Record<string, unknown> = {}) {
@@ -42,19 +42,46 @@ export default function Admin({
   const [selClient, setSelClient] = useState<string | null>(
     clients[0]?.id ?? null
   );
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [selPipeline, setSelPipeline] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selClient && clients[0]) setSelClient(clients[0].id);
   }, [clients, selClient]);
 
+  const loadPipelines = useCallback(() => {
+    if (!selClient) {
+      setPipelines([]);
+      setSelPipeline(null);
+      return;
+    }
+    supabase
+      .from("pipelines")
+      .select("id, client_id, name, position, meta_form_id, meta_ad_account_id, created_at")
+      .eq("client_id", selClient)
+      .order("position")
+      .then(({ data }) => {
+        const list = (data as Pipeline[]) ?? [];
+        setPipelines(list);
+        setSelPipeline((prev) =>
+          list.find((p) => p.id === prev) ? prev : list[0]?.id ?? null
+        );
+      });
+  }, [selClient]);
+
+  useEffect(() => {
+    loadPipelines();
+  }, [loadPipelines]);
+
   const current = clients.find((c) => c.id === selClient) ?? null;
+  const currentPipeline = pipelines.find((p) => p.id === selPipeline) ?? null;
 
   return (
     <div className="page">
       <h1>Amministrazione</h1>
       <p className="sub">
-        Gestisci clienti, fasi e accessi. Qui trovi anche i dati per collegare
-        n8n.
+        Gestisci clienti, pipeline, fasi e accessi. Qui trovi anche i dati per
+        collegare n8n.
       </p>
 
       <ClientsPanel
@@ -67,7 +94,16 @@ export default function Admin({
       {current && (
         <>
           <ConnectPanel client={current} onChanged={onClientsChanged} />
-          <StagesPanel client={current} />
+          <PipelinesPanel
+            client={current}
+            pipelines={pipelines}
+            selPipeline={selPipeline}
+            setSelPipeline={setSelPipeline}
+            onChanged={loadPipelines}
+          />
+          {currentPipeline && (
+            <StagesPanel client={current} pipeline={currentPipeline} />
+          )}
         </>
       )}
 
@@ -196,16 +232,12 @@ function ConnectPanel({
   onChanged: () => void;
 }) {
   const [pageId, setPageId] = useState(client.meta_page_id ?? "");
-  const [formId, setFormId] = useState(client.meta_form_id ?? "");
-  const [adAccount, setAdAccount] = useState(client.meta_ad_account_id ?? "");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
   // Riallinea i campi quando cambio cliente selezionato
   useEffect(() => {
     setPageId(client.meta_page_id ?? "");
-    setFormId(client.meta_form_id ?? "");
-    setAdAccount(client.meta_ad_account_id ?? "");
     setSaved(false);
   }, [client.id]);
 
@@ -213,11 +245,7 @@ function ConnectPanel({
     setBusy(true);
     const { error } = await supabase
       .from("clients")
-      .update({
-        meta_page_id: pageId.trim() || null,
-        meta_form_id: formId.trim() || null,
-        meta_ad_account_id: adAccount.trim() || null,
-      })
+      .update({ meta_page_id: pageId.trim() || null })
       .eq("id", client.id);
     setBusy(false);
     if (error) return alert(error.message);
@@ -232,7 +260,8 @@ function ConnectPanel({
       <p style={{ color: "var(--muted)", marginTop: -6 }}>
         I lead di Meta arrivano tramite n8n. Il CRM riconosce da solo il cliente
         dalla <b>Pagina Facebook</b>: inserisci qui sotto l'ID della Pagina di
-        questo cliente e non dovrai mettere nessun token in n8n.
+        questo cliente. Il <b>modulo</b> e l'<b>account pubblicitario</b> si
+        impostano invece per singola <b>pipeline</b> (qui sotto).
       </p>
 
       <div className="field">
@@ -240,35 +269,16 @@ function ConnectPanel({
         <CopyRow text={INGEST_FN_URL} />
       </div>
 
-      <div style={{ display: "flex", gap: 12 }}>
-        <div className="field" style={{ flex: 1 }}>
-          <label>ID Pagina Facebook di {client.name}</label>
-          <input
-            value={pageId}
-            onChange={(e) => setPageId(e.target.value)}
-            placeholder="es. 1234567890"
-          />
-        </div>
-        <div className="field" style={{ flex: 1 }}>
-          <label>ID Modulo Facebook (facoltativo)</label>
-          <input
-            value={formId}
-            onChange={(e) => setFormId(e.target.value)}
-            placeholder="solo se vuoi distinguere per modulo"
-          />
-        </div>
-      </div>
-
       <div className="field">
-        <label>ID Account pubblicitario Meta (per spesa, CPC, CTR)</label>
+        <label>ID Pagina Facebook di {client.name}</label>
         <input
-          value={adAccount}
-          onChange={(e) => setAdAccount(e.target.value)}
-          placeholder="es. 855734445329520"
+          value={pageId}
+          onChange={(e) => setPageId(e.target.value)}
+          placeholder="es. 1234567890"
         />
       </div>
       <button className="btn primary" onClick={save} disabled={busy}>
-        {saved ? "Salvato ✓" : busy ? "Salvo…" : "Salva collegamento Meta"}
+        {saved ? "Salvato ✓" : busy ? "Salvo…" : "Salva Pagina Facebook"}
       </button>
 
       <details style={{ marginTop: 14 }}>
@@ -281,6 +291,207 @@ function ConnectPanel({
         </div>
       </details>
     </div>
+  );
+}
+
+/* ---------------- Pipeline ---------------- */
+function PipelinesPanel({
+  client,
+  pipelines,
+  selPipeline,
+  setSelPipeline,
+  onChanged,
+}: {
+  client: Client;
+  pipelines: Pipeline[];
+  selPipeline: string | null;
+  setSelPipeline: (id: string) => void;
+  onChanged: () => void;
+}) {
+  const [newName, setNewName] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function add() {
+    if (!newName.trim()) return;
+    setBusy(true);
+    const pos = pipelines.length
+      ? Math.max(...pipelines.map((p) => p.position)) + 1
+      : 1;
+    const { error } = await supabase
+      .from("pipelines")
+      .insert({ client_id: client.id, name: newName.trim(), position: pos });
+    setBusy(false);
+    if (error) return alert(error.message);
+    setNewName("");
+    onChanged();
+  }
+
+  async function rename(p: Pipeline) {
+    const n = prompt("Nuovo nome pipeline:", p.name);
+    if (!n || !n.trim()) return;
+    const { error } = await supabase
+      .from("pipelines")
+      .update({ name: n.trim() })
+      .eq("id", p.id);
+    if (error) return alert(error.message);
+    onChanged();
+  }
+
+  async function saveMeta(p: Pipeline, form: string, ad: string) {
+    const { error } = await supabase
+      .from("pipelines")
+      .update({
+        meta_form_id: form.trim() || null,
+        meta_ad_account_id: ad.trim() || null,
+      })
+      .eq("id", p.id);
+    if (error) return alert(error.message);
+    onChanged();
+  }
+
+  async function del(p: Pipeline) {
+    if (
+      !confirm(
+        `Eliminare la pipeline "${p.name}"? Verranno cancellate le sue fasi e TUTTI i suoi lead. Operazione non annullabile.`
+      )
+    )
+      return;
+    const { error } = await supabase.from("pipelines").delete().eq("id", p.id);
+    if (error) return alert(error.message);
+    onChanged();
+  }
+
+  return (
+    <div className="panel">
+      <h2>Pipeline di {client.name}</h2>
+      <p style={{ color: "var(--muted)", marginTop: -6 }}>
+        Un cliente può avere più pipeline (es. servizi diversi). Ogni pipeline ha
+        le sue fasi, la sua bacheca e la sua dashboard. Il <b>Modulo Facebook</b>{" "}
+        indirizza i lead nella pipeline giusta; l'<b>Account pubblicitario</b>{" "}
+        serve per spesa/CPC/CTR di quella pipeline.
+      </p>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Pipeline</th>
+            <th>ID Modulo Facebook</th>
+            <th>ID Account pubblicitario</th>
+            <th style={{ width: 260 }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {pipelines.map((p) => (
+            <PipelineRow
+              key={p.id}
+              p={p}
+              selected={selPipeline === p.id}
+              onSelect={() => setSelPipeline(p.id)}
+              onRename={() => rename(p)}
+              onDelete={() => del(p)}
+              onSaveMeta={(form, ad) => saveMeta(p, form, ad)}
+            />
+          ))}
+        </tbody>
+      </table>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <input
+          className="field"
+          style={{ flex: 1, padding: 9 }}
+          placeholder="Nome nuova pipeline (es. Orto-K)"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+        />
+        <button className="btn primary" onClick={add} disabled={busy}>
+          + Aggiungi pipeline
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PipelineRow({
+  p,
+  selected,
+  onSelect,
+  onRename,
+  onDelete,
+  onSaveMeta,
+}: {
+  p: Pipeline;
+  selected: boolean;
+  onSelect: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+  onSaveMeta: (form: string, ad: string) => void;
+}) {
+  const [form, setForm] = useState(p.meta_form_id ?? "");
+  const [ad, setAd] = useState(p.meta_ad_account_id ?? "");
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    setForm(p.meta_form_id ?? "");
+    setAd(p.meta_ad_account_id ?? "");
+  }, [p.id, p.meta_form_id, p.meta_ad_account_id]);
+
+  return (
+    <tr>
+      <td>
+        <b>{p.name}</b>
+      </td>
+      <td>
+        <input
+          className="field"
+          style={{ padding: 7, width: 150 }}
+          value={form}
+          onChange={(e) => setForm(e.target.value)}
+          placeholder="ID modulo"
+        />
+      </td>
+      <td>
+        <input
+          className="field"
+          style={{ padding: 7, width: 150 }}
+          value={ad}
+          onChange={(e) => setAd(e.target.value)}
+          placeholder="ID account"
+        />
+      </td>
+      <td style={{ textAlign: "right" }}>
+        <button
+          className="btn small"
+          onClick={onSelect}
+          style={{
+            marginRight: 6,
+            ...(selected
+              ? { borderColor: "var(--brand)", color: "var(--brand)" }
+              : {}),
+          }}
+        >
+          {selected ? "● Fasi" : "Fasi"}
+        </button>
+        <button
+          className="btn small"
+          onClick={() => {
+            onSaveMeta(form, ad);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 1500);
+          }}
+          style={{ marginRight: 6 }}
+        >
+          {saved ? "Salvato ✓" : "Salva"}
+        </button>
+        <button
+          className="btn small"
+          onClick={onRename}
+          style={{ marginRight: 6 }}
+        >
+          Rinomina
+        </button>
+        <button className="btn small danger" onClick={onDelete}>
+          Elimina
+        </button>
+      </td>
+    </tr>
   );
 }
 
@@ -306,7 +517,7 @@ function CopyRow({ text }: { text: string }) {
 }
 
 /* ---------------- Fasi ---------------- */
-function StagesPanel({ client }: { client: Client }) {
+function StagesPanel({ client, pipeline }: { client: Client; pipeline: Pipeline }) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState("#2563eb");
@@ -315,13 +526,13 @@ function StagesPanel({ client }: { client: Client }) {
     const { data } = await supabase
       .from("stages")
       .select("*")
-      .eq("client_id", client.id)
+      .eq("pipeline_id", pipeline.id)
       .order("position");
     setStages((data as Stage[]) ?? []);
   }
   useEffect(() => {
     load();
-  }, [client.id]);
+  }, [pipeline.id]);
 
   async function add() {
     if (!newName.trim()) return;
@@ -330,6 +541,7 @@ function StagesPanel({ client }: { client: Client }) {
       : 1;
     const { error } = await supabase.from("stages").insert({
       client_id: client.id,
+      pipeline_id: pipeline.id,
       name: newName.trim(),
       color: newColor,
       position: pos,
@@ -373,7 +585,7 @@ function StagesPanel({ client }: { client: Client }) {
     await supabase
       .from("stages")
       .update({ is_entry: false })
-      .eq("client_id", client.id);
+      .eq("pipeline_id", pipeline.id);
     await supabase.from("stages").update({ is_entry: true }).eq("id", s.id);
     load();
   }
@@ -395,7 +607,7 @@ function StagesPanel({ client }: { client: Client }) {
 
   return (
     <div className="panel">
-      <h2>Fasi (colonne) di {client.name}</h2>
+      <h2>Fasi (colonne) · {client.name} → {pipeline.name}</h2>
       <table className="table">
         <thead>
           <tr>

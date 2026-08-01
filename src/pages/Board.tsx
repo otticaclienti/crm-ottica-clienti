@@ -11,16 +11,18 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { supabase } from "../supabaseClient";
-import type { Client, Lead, Stage } from "../types";
+import type { Client, Lead, Pipeline, Stage } from "../types";
 import LeadModal from "./LeadModal";
 
 export default function Board({
   client,
+  pipeline,
   canEdit,
   meName,
   autoAssign,
 }: {
   client: Client;
+  pipeline: Pipeline;
   canEdit: boolean;
   meName?: string;
   /** Se true, spostando un lead lo si assegna automaticamente a chi lo sposta
@@ -43,19 +45,19 @@ export default function Board({
       supabase
         .from("stages")
         .select("*")
-        .eq("client_id", client.id)
+        .eq("pipeline_id", pipeline.id)
         .order("position"),
       supabase
         .from("leads")
         .select("*")
-        .eq("client_id", client.id)
+        .eq("pipeline_id", pipeline.id)
         .order("position")
         .order("created_at", { ascending: false }),
     ]);
     setStages((st as Stage[]) ?? []);
     setLeads((ld as Lead[]) ?? []);
     setLoading(false);
-  }, [client.id]);
+  }, [pipeline.id]);
 
   useEffect(() => {
     setLoading(true);
@@ -63,14 +65,14 @@ export default function Board({
     // Aggiornamento in tempo reale: se un'altra segretaria sposta un lead,
     // la bacheca si aggiorna da sola.
     const ch = supabase
-      .channel(`leads-${client.id}`)
+      .channel(`leads-${pipeline.id}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "leads",
-          filter: `client_id=eq.${client.id}`,
+          filter: `pipeline_id=eq.${pipeline.id}`,
         },
         () => load()
       )
@@ -78,7 +80,7 @@ export default function Board({
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [client.id, load]);
+  }, [pipeline.id, load]);
 
   const leadsByStage = useMemo(() => {
     const map: Record<string, Lead[]> = {};

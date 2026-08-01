@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./useAuth";
-import type { Client } from "./types";
+import type { Client, Pipeline } from "./types";
 import Login from "./pages/Login";
 import Board from "./pages/Board";
 import Dashboard from "./pages/Dashboard";
@@ -15,6 +15,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("board");
   const [clients, setClients] = useState<Client[]>([]);
   const [clientId, setClientId] = useState<string | null>(null);
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [pipelineId, setPipelineId] = useState<string | null>(null);
 
   const isAdmin = auth.profile?.role === "admin";
   const meName = auth.profile?.full_name || auth.email || "";
@@ -63,7 +65,27 @@ export default function App() {
     );
   }
 
+  // Carica le pipeline del cliente selezionato
+  useEffect(() => {
+    if (!clientId) {
+      setPipelines([]);
+      setPipelineId(null);
+      return;
+    }
+    supabase
+      .from("pipelines")
+      .select("id, client_id, name, position, meta_form_id, meta_ad_account_id, created_at")
+      .eq("client_id", clientId)
+      .order("position")
+      .then(({ data }) => {
+        const list = (data as Pipeline[]) ?? [];
+        setPipelines(list);
+        setPipelineId(list[0]?.id ?? null);
+      });
+  }, [clientId]);
+
   const currentClient = clients.find((c) => c.id === clientId) ?? null;
+  const currentPipeline = pipelines.find((p) => p.id === pipelineId) ?? null;
 
   return (
     <div className="app">
@@ -119,6 +141,22 @@ export default function App() {
           </select>
         )}
 
+        {/* Selettore pipeline: appare solo se il cliente ha piu' di una pipeline */}
+        {pipelines.length > 1 && tab !== "admin" && tab !== "performance" && (
+          <select
+            className="select"
+            value={pipelineId ?? ""}
+            onChange={(e) => setPipelineId(e.target.value)}
+            title="Scegli la pipeline"
+          >
+            {pipelines.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+
         <div className="spacer" />
         <div className="who">
           <b>{auth.profile.full_name || auth.email}</b>
@@ -131,24 +169,25 @@ export default function App() {
       </div>
 
       {tab === "board" &&
-        (currentClient ? (
+        (currentClient && currentPipeline ? (
           <Board
             client={currentClient}
+            pipeline={currentPipeline}
             canEdit={true}
             meName={meName}
             autoAssign={!isAdmin}
           />
         ) : (
-          <div className="center-msg">Nessun cliente disponibile.</div>
+          <div className="center-msg">Nessuna pipeline disponibile.</div>
         ))}
 
       {tab === "performance" && isAdmin && <Performance clients={clients} />}
 
       {tab === "dashboard" &&
-        (currentClient ? (
-          <Dashboard client={currentClient} />
+        (currentClient && currentPipeline ? (
+          <Dashboard client={currentClient} pipeline={currentPipeline} />
         ) : (
-          <div className="center-msg">Nessun cliente disponibile.</div>
+          <div className="center-msg">Nessuna pipeline disponibile.</div>
         ))}
 
       {tab === "admin" && isAdmin && (
