@@ -132,7 +132,12 @@ export default function App() {
 
       {tab === "board" &&
         (currentClient ? (
-          <Board client={currentClient} canEdit={true} meName={meName} />
+          <Board
+            client={currentClient}
+            canEdit={true}
+            meName={meName}
+            autoAssign={!isAdmin}
+          />
         ) : (
           <div className="center-msg">Nessun cliente disponibile.</div>
         ))}

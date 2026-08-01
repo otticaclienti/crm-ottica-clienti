@@ -18,10 +18,14 @@ export default function Board({
   client,
   canEdit,
   meName,
+  autoAssign,
 }: {
   client: Client;
   canEdit: boolean;
   meName?: string;
+  /** Se true, spostando un lead lo si assegna automaticamente a chi lo sposta
+   *  (attivo per le segretarie, disattivo per l'admin). */
+  autoAssign?: boolean;
 }) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -101,17 +105,24 @@ export default function Board({
     );
     const newPos = minPos - 1;
 
+    // Chi lavora il lead se lo prende (regola: "ultimo che l'ha lavorato").
+    // Attivo solo per le segretarie: gli spostamenti dell'admin non riassegnano.
+    const patch: {
+      stage_id: string;
+      position: number;
+      assigned_to?: string;
+    } = { stage_id: targetStageId, position: newPos };
+    if (autoAssign && meName && meName.trim()) {
+      patch.assigned_to = meName.trim();
+    }
+
     // Aggiornamento ottimistico (immediato a schermo)
     setLeads((prev) =>
-      prev.map((l) =>
-        l.id === leadId
-          ? { ...l, stage_id: targetStageId, position: newPos }
-          : l
-      )
+      prev.map((l) => (l.id === leadId ? { ...l, ...patch } : l))
     );
     const { error } = await supabase
       .from("leads")
-      .update({ stage_id: targetStageId, position: newPos })
+      .update(patch)
       .eq("id", leadId);
     if (error) {
       alert("Non è stato possibile spostare il lead: " + error.message);
