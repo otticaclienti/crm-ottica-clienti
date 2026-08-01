@@ -7,6 +7,7 @@ interface Props {
   newInStage?: Stage;
   clientId?: string;
   stages: Stage[];
+  meName?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -16,6 +17,7 @@ export default function LeadModal({
   newInStage,
   clientId,
   stages,
+  meName,
   onClose,
   onSaved,
 }: Props) {
@@ -113,7 +115,18 @@ export default function LeadModal({
               </select>
             </div>
             <div className="field" style={{ flex: 1 }}>
-              <label>Assegnata a</label>
+              <label>
+                Assegnata a
+                {meName && meName.trim() && assigned.trim() !== meName.trim() && (
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={() => setAssigned(meName.trim())}
+                  >
+                    Assegna a me
+                  </button>
+                )}
+              </label>
               <input
                 value={assigned}
                 onChange={(e) => setAssigned(e.target.value)}

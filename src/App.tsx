@@ -6,8 +6,9 @@ import Login from "./pages/Login";
 import Board from "./pages/Board";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
+import Performance from "./pages/Performance";
 
-type Tab = "board" | "dashboard" | "admin";
+type Tab = "board" | "dashboard" | "performance" | "admin";
 
 export default function App() {
   const auth = useAuth();
@@ -16,6 +17,7 @@ export default function App() {
   const [clientId, setClientId] = useState<string | null>(null);
 
   const isAdmin = auth.profile?.role === "admin";
+  const meName = auth.profile?.full_name || auth.email || "";
 
   // Carica i clienti visibili (l'admin li vede tutti, la segretaria solo il suo)
   useEffect(() => {
@@ -85,6 +87,14 @@ export default function App() {
           </button>
           {isAdmin && (
             <button
+              className={tab === "performance" ? "active" : ""}
+              onClick={() => setTab("performance")}
+            >
+              Performance
+            </button>
+          )}
+          {isAdmin && (
+            <button
               className={tab === "admin" ? "active" : ""}
               onClick={() => setTab("admin")}
             >
@@ -94,7 +104,7 @@ export default function App() {
         </nav>
 
         {/* Selettore cliente: l'admin sceglie, la segretaria lo vede bloccato */}
-        {clients.length > 0 && tab !== "admin" && (
+        {clients.length > 0 && tab !== "admin" && tab !== "performance" && (
           <select
             className="select"
             value={clientId ?? ""}
@@ -122,10 +132,12 @@ export default function App() {
 
       {tab === "board" &&
         (currentClient ? (
-          <Board client={currentClient} canEdit={true} />
+          <Board client={currentClient} canEdit={true} meName={meName} />
         ) : (
           <div className="center-msg">Nessun cliente disponibile.</div>
         ))}
+
+      {tab === "performance" && isAdmin && <Performance clients={clients} />}
 
       {tab === "dashboard" &&
         (currentClient ? (

@@ -17,9 +17,11 @@ import LeadModal from "./LeadModal";
 export default function Board({
   client,
   canEdit,
+  meName,
 }: {
   client: Client;
   canEdit: boolean;
+  meName?: string;
 }) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -160,6 +162,7 @@ export default function Board({
         <LeadModal
           lead={editing}
           stages={stages}
+          meName={meName}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -172,6 +175,7 @@ export default function Board({
           newInStage={creatingInStage}
           clientId={client.id}
           stages={stages}
+          meName={meName}
           onClose={() => setCreatingInStage(null)}
           onSaved={() => {
             setCreatingInStage(null);

@@ -498,3 +498,82 @@ a {
   border-radius: 6px;
   word-break: break-all;
 }
+
+/* ---- Performance segretarie ---- */
+.perf-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+.perf-table th,
+.perf-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.perf-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.perf-table td.pos,
+.perf-table th:nth-child(6),
+.perf-table th:nth-child(7) {
+  color: #16a34a;
+}
+.perf-table td.pos {
+  font-weight: 700;
+}
+.perf-row {
+  cursor: pointer;
+}
+.perf-row:hover {
+  background: #f8fafc;
+}
+.perf-row.open {
+  background: #f1f5f9;
+}
+.perf-caret {
+  display: inline-block;
+  width: 16px;
+  color: var(--muted);
+}
+.perf-detail td {
+  background: #f8fafc;
+  padding: 6px 12px 12px 40px;
+}
+.perf-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.perf-sub-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;
+  gap: 10px;
+  font-size: 13px;
+  align-items: center;
+}
+.perf-sub-row .cn {
+  font-weight: 600;
+}
+.perf-sub-row .pos {
+  color: #16a34a;
+  font-weight: 600;
+}
+.perf-sub-row .muted {
+  color: var(--muted);
+}
+.link-btn {
+  border: none;
+  background: none;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 0 0 8px;
+  text-decoration: underline;
+}
+.link-btn:hover {
+  color: #1d4ed8;
+}
