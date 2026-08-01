@@ -42,6 +42,27 @@ export default function App() {
       });
   }, [auth.profile]);
 
+  // Carica le pipeline del cliente selezionato.
+  // IMPORTANTE: questo hook deve stare PRIMA di ogni return condizionale,
+  // altrimenti React cambia il numero di hook tra un render e l'altro (schermo bianco).
+  useEffect(() => {
+    if (!clientId) {
+      setPipelines([]);
+      setPipelineId(null);
+      return;
+    }
+    supabase
+      .from("pipelines")
+      .select("id, client_id, name, position, meta_form_id, meta_ad_account_id, created_at")
+      .eq("client_id", clientId)
+      .order("position")
+      .then(({ data }) => {
+        const list = (data as Pipeline[]) ?? [];
+        setPipelines(list);
+        setPipelineId((prev) => (list.find((p) => p.id === prev) ? prev : list[0]?.id ?? null));
+      });
+  }, [clientId]);
+
   if (auth.loading) {
     return <div className="center-msg">Caricamento…</div>;
   }
@@ -64,25 +85,6 @@ export default function App() {
       </div>
     );
   }
-
-  // Carica le pipeline del cliente selezionato
-  useEffect(() => {
-    if (!clientId) {
-      setPipelines([]);
-      setPipelineId(null);
-      return;
-    }
-    supabase
-      .from("pipelines")
-      .select("id, client_id, name, position, meta_form_id, meta_ad_account_id, created_at")
-      .eq("client_id", clientId)
-      .order("position")
-      .then(({ data }) => {
-        const list = (data as Pipeline[]) ?? [];
-        setPipelines(list);
-        setPipelineId(list[0]?.id ?? null);
-      });
-  }, [clientId]);
 
   const currentClient = clients.find((c) => c.id === clientId) ?? null;
   const currentPipeline = pipelines.find((p) => p.id === pipelineId) ?? null;
