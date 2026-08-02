@@ -4,7 +4,7 @@ import { useAuth } from "./useAuth";
 import type { Client, Pipeline } from "./types";
 import Login from "./pages/Login";
 import Board from "./pages/Board";
-import Dashboard from "./pages/Dashboard";
+import Dashboard, { ALL_PIPELINES_ID } from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import Performance from "./pages/Performance";
 
@@ -87,7 +87,23 @@ export default function App() {
   }
 
   const currentClient = clients.find((c) => c.id === clientId) ?? null;
-  const currentPipeline = pipelines.find((p) => p.id === pipelineId) ?? null;
+  const isAllView = pipelineId === ALL_PIPELINES_ID;
+  // Pipeline sintetica "Totale": esiste solo per la Dashboard.
+  const allPipeline: Pipeline | null =
+    isAllView && clientId
+      ? {
+          id: ALL_PIPELINES_ID,
+          client_id: clientId,
+          name: "Totale (tutti i servizi)",
+          position: -1,
+          meta_form_id: null,
+          meta_ad_account_id: null,
+          created_at: "",
+        }
+      : null;
+  const currentPipeline = allPipeline ?? pipelines.find((p) => p.id === pipelineId) ?? null;
+  // La Bacheca non conosce la vista Totale: usa sempre una pipeline reale.
+  const boardPipeline = isAllView ? pipelines[0] ?? null : currentPipeline;
 
   return (
     <div className="app">
@@ -99,7 +115,11 @@ export default function App() {
         <nav className="nav">
           <button
             className={tab === "board" ? "active" : ""}
-            onClick={() => setTab("board")}
+            onClick={() => {
+              setTab("board");
+              // La Bacheca non ha la vista Totale: torna a una pipeline reale.
+              if (pipelineId === ALL_PIPELINES_ID) setPipelineId(pipelines[0]?.id ?? null);
+            }}
           >
             Bacheca
           </button>
@@ -156,6 +176,10 @@ export default function App() {
                 {p.name}
               </option>
             ))}
+            {/* La vista Totale somma tutti i servizi: solo nella Dashboard */}
+            {tab === "dashboard" && (
+              <option value={ALL_PIPELINES_ID}>Totale (tutti i servizi)</option>
+            )}
           </select>
         )}
 
@@ -171,10 +195,10 @@ export default function App() {
       </div>
 
       {tab === "board" &&
-        (currentClient && currentPipeline ? (
+        (currentClient && boardPipeline ? (
           <Board
             client={currentClient}
-            pipeline={currentPipeline}
+            pipeline={boardPipeline}
             canEdit={true}
             meName={meName}
             autoAssign={!isAdmin}
@@ -187,7 +211,7 @@ export default function App() {
 
       {tab === "dashboard" &&
         (currentClient && currentPipeline ? (
-          <Dashboard client={currentClient} pipeline={currentPipeline} />
+          <Dashboard client={currentClient} pipeline={currentPipeline} pipelines={pipelines} />
         ) : (
           <div className="center-msg">Nessuna pipeline disponibile.</div>
         ))}

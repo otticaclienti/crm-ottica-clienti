@@ -56,7 +56,17 @@ const PRESET_LABEL: Record<Preset, string> = {
   last6: "Ultimi 6 mesi", year: "Quest'anno", all: "Sempre", custom: "Personalizzato",
 };
 
-export default function Dashboard({ client, pipeline }: { client: Client; pipeline: Pipeline }) {
+export const ALL_PIPELINES_ID = "__all__";
+
+export default function Dashboard({
+  client,
+  pipeline,
+  pipelines = [],
+}: {
+  client: Client;
+  pipeline: Pipeline;
+  pipelines?: Pipeline[];
+}) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [ads, setAds] = useState<AdMetrics | null>(null);
@@ -66,21 +76,31 @@ export default function Dashboard({ client, pipeline }: { client: Client; pipeli
   const [cf, setCf] = useState("");
   const [ct, setCt] = useState("");
 
+  // Modalita' "Totale": somma tutti i servizi (pipeline) del cliente.
+  const isAll = pipeline.id === ALL_PIPELINES_ID;
+  const ids = isAll ? pipelines.map((p) => p.id) : [pipeline.id];
+  const idsKey = ids.join(",");
+
   useEffect(() => {
+    if (ids.length === 0) {
+      setStages([]); setLeads([]); setAds(null); setMonths([]); setLoading(false);
+      return;
+    }
     setLoading(true);
     Promise.all([
-      supabase.from("stages").select("*").eq("pipeline_id", pipeline.id).order("position"),
-      supabase.from("leads").select("*").eq("pipeline_id", pipeline.id),
-      supabase.from("client_ad_metrics").select("*").eq("pipeline_id", pipeline.id).maybeSingle(),
-      supabase.from("ad_metrics_monthly").select("*").eq("pipeline_id", pipeline.id).order("month", { ascending: false }),
+      supabase.from("stages").select("*").in("pipeline_id", ids).order("position"),
+      supabase.from("leads").select("*").in("pipeline_id", ids),
+      supabase.from("client_ad_metrics").select("*").in("pipeline_id", ids),
+      supabase.from("ad_metrics_monthly").select("*").in("pipeline_id", ids).order("month", { ascending: false }),
     ]).then(([{ data: st }, { data: ld }, { data: adm }, { data: mm }]) => {
       setStages((st as Stage[]) ?? []);
       setLeads((ld as Lead[]) ?? []);
-      setAds((adm as AdMetrics) ?? null);
-      setMonths((mm as MonthRow[]) ?? []);
+      setAds(aggregateAds((adm as AdMetrics[]) ?? []));
+      setMonths(aggregateMonths((mm as MonthRow[]) ?? []));
       setLoading(false);
     });
-  }, [pipeline.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
 
   const stageById = useMemo(() => {
     const m: Record<string, Stage> = {};
@@ -117,17 +137,26 @@ export default function Dashboard({ client, pipeline }: { client: Client; pipeli
   );
 
   const snapshot = useMemo(() => {
-    const byStage = stages.map((s) => ({
-      label: s.name, color: s.color || "#94a3b8",
-      count: leads.filter((l) => l.stage_id === s.id).length,
-    }));
+    // Raggruppa per NOME fase: in modalita' Totale le 3 pipeline condividono
+    // le stesse fasi, quindi sommiamo i lead con lo stesso nome fase.
+    const byName = new Map<string, { label: string; color: string; count: number; pos: number }>();
+    for (const s of stages) {
+      const e = byName.get(s.name) ?? { label: s.name, color: s.color || "#94a3b8", count: 0, pos: s.position };
+      e.pos = Math.min(e.pos, s.position);
+      byName.set(s.name, e);
+    }
+    for (const l of leads) {
+      const st = stageById[l.stage_id];
+      if (st && byName.has(st.name)) byName.get(st.name)!.count += 1;
+    }
+    const byStage = [...byName.values()].sort((a, b) => a.pos - b.pos);
     return {
       total: leads.length,
       valoreTot: leads.reduce((s, l) => s + (Number(l.value) || 0), 0),
       byStage,
       byAssigned: groupCount(leads.map((l) => l.assigned_to || "— non assegnato")),
     };
-  }, [leads, stages]);
+  }, [leads, stages, stageById]);
 
   if (loading) return <div className="center-msg">Caricamento dati…</div>;
 
@@ -143,7 +172,13 @@ export default function Dashboard({ client, pipeline }: { client: Client; pipeli
   return (
     <div className="page">
       <h1>Dashboard · {client.name}</h1>
-      <p className="sub">Pipeline: <b>{pipeline.name}</b></p>
+      <p className="sub">
+        {isAll ? (
+          <>Vista: <b>Totale (tutti i servizi)</b> · somma di {ids.length} pipeline</>
+        ) : (
+          <>Pipeline: <b>{pipeline.name}</b></>
+        )}
+      </p>
 
       {/* Selettore periodo */}
       <div className="panel" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -244,6 +279,54 @@ export default function Dashboard({ client, pipeline }: { client: Client; pipeli
       </div>
     </div>
   );
+}
+
+// Somma le metriche "ultimi 30 giorni" di piu' pipeline in un unico blocco.
+function aggregateAds(rows: AdMetrics[]): AdMetrics | null {
+  if (!rows || rows.length === 0) return null;
+  let spend = 0, leads = 0, cpcW = 0, ctrW = 0, cpmW = 0, w = 0, updated = "";
+  for (const r of rows) {
+    const s = Number(r.spend) || 0;
+    spend += s;
+    leads += Number(r.leads_count) || 0;
+    cpcW += (Number(r.cpc) || 0) * s;
+    ctrW += (Number(r.ctr) || 0) * s;
+    cpmW += (Number(r.cpm) || 0) * s;
+    w += s;
+    if (r.updated_at && r.updated_at > updated) updated = r.updated_at;
+  }
+  return {
+    spend, leads_count: leads,
+    cost_per_lead: leads ? spend / leads : 0,
+    cpc: w ? cpcW / w : 0,
+    ctr: w ? ctrW / w : 0,
+    cpm: w ? cpmW / w : 0,
+    updated_at: updated,
+  };
+}
+
+// Somma lo storico mensile di piu' pipeline: per ogni mese, spesa e lead si
+// sommano; CPC e CTR sono medie pesate sulla spesa.
+function aggregateMonths(rows: MonthRow[]): MonthRow[] {
+  const map = new Map<string, { spend: number; leads: number; cpcW: number; ctrW: number; w: number }>();
+  for (const r of rows) {
+    const e = map.get(r.month) ?? { spend: 0, leads: 0, cpcW: 0, ctrW: 0, w: 0 };
+    const s = Number(r.spend) || 0;
+    e.spend += s;
+    e.leads += Number(r.leads_count) || 0;
+    e.cpcW += (Number(r.cpc) || 0) * s;
+    e.ctrW += (Number(r.ctr) || 0) * s;
+    e.w += s;
+    map.set(r.month, e);
+  }
+  return [...map.entries()]
+    .map(([month, e]) => ({
+      month, spend: e.spend, leads_count: e.leads,
+      cost_per_lead: e.leads ? e.spend / e.leads : 0,
+      cpc: e.w ? e.cpcW / e.w : 0,
+      ctr: e.w ? e.ctrW / e.w : 0,
+    }))
+    .sort((a, b) => b.month.localeCompare(a.month));
 }
 
 function delta(cur: number, prev: number, has: boolean, money = false, lowerBetter = false): ReactNode {
