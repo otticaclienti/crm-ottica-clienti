@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./useAuth";
-import type { Client, Pipeline } from "./types";
+import type { Client, Lead, Pipeline } from "./types";
 import Login from "./pages/Login";
 import Board from "./pages/Board";
 import Dashboard, { ALL_PIPELINES_ID } from "./pages/Dashboard";
@@ -17,6 +17,36 @@ export default function App() {
   const [clientId, setClientId] = useState<string | null>(null);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [pipelineId, setPipelineId] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [qResults, setQResults] = useState<Lead[]>([]);
+  const [focusLeadId, setFocusLeadId] = useState<string | null>(null);
+
+  // Ricerca globale: per nome o telefono, su tutti i lead visibili
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      setQResults([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      supabase
+        .from("leads")
+        .select("id, name, phone, client_id, pipeline_id, stage_id")
+        .or(`name.ilike.%${term}%,phone.ilike.%${term}%`)
+        .limit(8)
+        .then(({ data }) => setQResults((data as Lead[]) ?? []));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  function selectLead(l: Lead) {
+    setQ("");
+    setQResults([]);
+    setTab("board");
+    setClientId(l.client_id);
+    setPipelineId(l.pipeline_id);
+    setFocusLeadId(l.id);
+  }
 
   const isAdmin = auth.profile?.role === "admin";
   const meName = auth.profile?.full_name || auth.email || "";
@@ -184,10 +214,42 @@ export default function App() {
         )}
 
         <div className="spacer" />
-        <div className="who">
-          <b>{auth.profile.full_name || auth.email}</b>
-          <br />
-          {isAdmin ? "Amministratore" : "Segretaria"}
+
+        {/* Cerca lead: digiti e scegli, si apre nella sua bacheca */}
+        <div className="search-wrap">
+          <div className="search">
+            🔍
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Cerca lead per nome o telefono…"
+            />
+          </div>
+          {qResults.length > 0 && (
+            <div className="search-results">
+              {qResults.map((l) => (
+                <div className="sr" key={l.id} onClick={() => selectLead(l)}>
+                  <span>
+                    <b>{l.name || "(senza nome)"}</b>
+                    {l.phone}
+                  </span>
+                  <span>
+                    {clients.find((c) => c.id === l.client_id)?.name ?? ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="userchip">
+          <div className="avatar">
+            {(auth.profile.full_name || auth.email || "?").charAt(0).toUpperCase()}
+          </div>
+          <div className="who">
+            <b>{auth.profile.full_name || auth.email}</b>
+            {isAdmin ? "Amministratore" : "Segretaria"}
+          </div>
         </div>
         <button className="btn small" onClick={() => supabase.auth.signOut()}>
           Esci
@@ -202,6 +264,8 @@ export default function App() {
             canEdit={true}
             meName={meName}
             autoAssign={!isAdmin}
+            focusLeadId={focusLeadId}
+            onFocusConsumed={() => setFocusLeadId(null)}
           />
         ) : (
           <div className="center-msg">Nessuna pipeline disponibile.</div>

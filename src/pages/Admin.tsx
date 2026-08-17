@@ -44,6 +44,7 @@ export default function Admin({
   );
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selPipeline, setSelPipeline] = useState<string | null>(null);
+  const [sub, setSub] = useState<"stato" | "attivita" | "clienti" | "accessi" | "fasi">("stato");
 
   useEffect(() => {
     if (!selClient && clients[0]) setSelClient(clients[0].id);
@@ -80,37 +81,58 @@ export default function Admin({
     <div className="page">
       <h1>Amministrazione</h1>
       <p className="sub">
-        Gestisci clienti, pipeline, fasi e accessi. Qui trovi anche i dati per
-        collegare n8n.
+        Gestisci clienti, pipeline, fasi e accessi — una cosa alla volta.
       </p>
 
-      <ClientsPanel
-        clients={clients}
-        onChanged={onClientsChanged}
-        selClient={selClient}
-        setSelClient={setSelClient}
-      />
+      <div className="subnav">
+        <button className={sub === "stato" ? "active" : ""} onClick={() => setSub("stato")}>
+          Stato integrazione
+        </button>
+        <button className={sub === "attivita" ? "active" : ""} onClick={() => setSub("attivita")}>
+          Attività (log)
+        </button>
+        <button className={sub === "clienti" ? "active" : ""} onClick={() => setSub("clienti")}>
+          Clienti
+        </button>
+        <button className={sub === "accessi" ? "active" : ""} onClick={() => setSub("accessi")}>
+          Accessi
+        </button>
+        <button className={sub === "fasi" ? "active" : ""} onClick={() => setSub("fasi")}>
+          Fasi e pipeline
+        </button>
+      </div>
 
-      {current && (
-        <>
-          <ConnectPanel client={current} onChanged={onClientsChanged} />
-          <PipelinesPanel
-            client={current}
-            pipelines={pipelines}
-            selPipeline={selPipeline}
-            setSelPipeline={setSelPipeline}
-            onChanged={loadPipelines}
-          />
-          {currentPipeline && (
-            <StagesPanel client={current} pipeline={currentPipeline} />
-          )}
-        </>
+      {sub === "stato" && <IntegrationPanel clients={clients} />}
+      {sub === "attivita" && <ActivityPanel clients={clients} />}
+      {sub === "clienti" && (
+        <ClientsPanel
+          clients={clients}
+          onChanged={onClientsChanged}
+          selClient={selClient}
+          setSelClient={setSelClient}
+        />
       )}
-
-      <UsersPanel clients={clients} />
-
-      <IntegrationPanel clients={clients} />
-      <ActivityPanel clients={clients} />
+      {sub === "accessi" && <UsersPanel clients={clients} />}
+      {sub === "fasi" &&
+        (current ? (
+          <>
+            <ConnectPanel client={current} onChanged={onClientsChanged} />
+            <PipelinesPanel
+              client={current}
+              pipelines={pipelines}
+              selPipeline={selPipeline}
+              setSelPipeline={setSelPipeline}
+              onChanged={loadPipelines}
+            />
+            {currentPipeline && (
+              <StagesPanel client={current} pipeline={currentPipeline} />
+            )}
+          </>
+        ) : (
+          <div className="center-msg" style={{ padding: 30 }}>
+            Aggiungi prima un cliente nella sezione "Clienti".
+          </div>
+        ))}
     </div>
   );
 }
@@ -757,9 +779,10 @@ function IntegrationPanel({ clients }: { clients: Client[] }) {
     return d + " gg fa";
   }
 
-  const Dot = ({ ok }: { ok: boolean }) => (
-    <span style={{ color: ok ? "#16a34a" : "#dc2626", fontWeight: 700 }}>
-      {ok ? "✓" : "✗"}
+  const St = ({ ok, yes, no }: { ok: boolean; yes: string; no: string }) => (
+    <span className={"st " + (ok ? "ok" : "warn")}>
+      <span className="ic">{ok ? "✓" : "⚠"}</span>
+      {ok ? yes : no}
     </span>
   );
 
@@ -789,9 +812,9 @@ function IntegrationPanel({ clients }: { clients: Client[] }) {
             {clients.map((c) => (
               <tr key={c.id}>
                 <td><b>{c.name}</b></td>
-                <td><Dot ok={Boolean(c.meta_page_id)} /></td>
-                <td><Dot ok={tokens[c.id] ?? false} /></td>
-                <td><Dot ok={Boolean(c.meta_ad_account_id)} /></td>
+                <td><St ok={Boolean(c.meta_page_id)} yes="collegata" no="mancante" /></td>
+                <td><St ok={tokens[c.id] ?? false} yes="valido" no="mancante" /></td>
+                <td><St ok={Boolean(c.meta_ad_account_id)} yes="attivo" no="non collegato" /></td>
                 <td>{stats[c.id]?.lead7 ?? 0}</td>
                 <td>{giorniFa(stats[c.id]?.last ?? null)}</td>
               </tr>

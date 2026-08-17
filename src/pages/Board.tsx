@@ -20,6 +20,8 @@ export default function Board({
   canEdit,
   meName,
   autoAssign,
+  focusLeadId,
+  onFocusConsumed,
 }: {
   client: Client;
   pipeline: Pipeline;
@@ -28,6 +30,9 @@ export default function Board({
   /** Se true, spostando un lead lo si assegna automaticamente a chi lo sposta
    *  (attivo per le segretarie, disattivo per l'admin). */
   autoAssign?: boolean;
+  /** Apre in modale il lead arrivato dalla ricerca globale. */
+  focusLeadId?: string | null;
+  onFocusConsumed?: () => void;
 }) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -81,6 +86,16 @@ export default function Board({
       supabase.removeChannel(ch);
     };
   }, [pipeline.id, load]);
+
+  // Lead arrivato dalla ricerca globale: apri la sua scheda
+  useEffect(() => {
+    if (!focusLeadId) return;
+    const lead = leads.find((l) => l.id === focusLeadId);
+    if (lead) {
+      setEditing(lead);
+      onFocusConsumed?.();
+    }
+  }, [focusLeadId, leads, onFocusConsumed]);
 
   const leadsByStage = useMemo(() => {
     const map: Record<string, Lead[]> = {};
@@ -297,9 +312,14 @@ function LeadCardInner({ lead }: { lead: Lead }) {
         </div>
       )}
       <div className="tags">
-        {lead.source && <span className="tag src">{lead.source}</span>}
-        {lead.assigned_to && <span className="tag">{lead.assigned_to}</span>}
-        {lead.notes && <span className="tag note">📝 nota</span>}
+        {lead.assigned_to && (
+          <span className="chip">
+            <span className="mini">{lead.assigned_to.trim().charAt(0).toUpperCase()}</span>
+            {lead.assigned_to}
+          </span>
+        )}
+        {lead.source && <span className="chip src">{lead.source}</span>}
+        {lead.notes && <span className="chip note">📝 nota</span>}
       </div>
     </>
   );
