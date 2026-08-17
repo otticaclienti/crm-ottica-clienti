@@ -49,10 +49,15 @@ export default function LeadModal({
       notes: notes.trim() || null,
     };
     let error;
+    let newLeadId: string | null = null;
     if (isNew) {
-      ({ error } = await supabase
+      const res = await supabase
         .from("leads")
-        .insert({ ...payload, client_id: clientId }));
+        .insert({ ...payload, client_id: clientId })
+        .select("id")
+        .single();
+      error = res.error;
+      newLeadId = (res.data as { id: string } | null)?.id ?? null;
     } else {
       ({ error } = await supabase
         .from("leads")
@@ -61,7 +66,23 @@ export default function LeadModal({
     }
     setBusy(false);
     if (error) setErr(error.message);
-    else onSaved();
+    else {
+      // Se la fase è cambiata (o il lead è nuovo), il database ha registrato
+      // l'evento da solo: ci scriviamo sopra il nome di chi l'ha fatto.
+      const stageChanged = isNew || stageId !== lead!.stage_id;
+      const lid = newLeadId ?? lead!.id;
+      if (stageChanged && meName?.trim() && lid) {
+        supabase
+          .from("lead_stage_events")
+          .update({ changed_by: meName.trim() })
+          .eq("lead_id", lid)
+          .is("changed_by", null)
+          .order("changed_at", { ascending: false })
+          .limit(1)
+          .then(() => {});
+      }
+      onSaved();
+    }
   }
 
   async function remove() {

@@ -108,6 +108,9 @@ export default function Admin({
       )}
 
       <UsersPanel clients={clients} />
+
+      <IntegrationPanel clients={clients} />
+      <ActivityPanel clients={clients} />
     </div>
   );
 }
@@ -701,6 +704,220 @@ function StagesPanel({ client, pipeline }: { client: Client; pipeline: Pipeline 
       </div>
     </div>
   );
+}
+
+/* ---------------- Stato integrazione ---------------- */
+function IntegrationPanel({ clients }: { clients: Client[] }) {
+  const [stats, setStats] = useState<Record<string, IntStat>>({});
+  const [tokens, setTokens] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      const out: Record<string, IntStat> = {};
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const [tok] = await Promise.all([
+        supabase.from("clients").select("id, meta_page_token"),
+      ]);
+      const tk: Record<string, boolean> = {};
+      for (const t of (tok.data as { id: string; meta_page_token: string | null }[]) ?? []) {
+        tk[t.id] = Boolean(t.meta_page_token);
+      }
+      setTokens(tk);
+      for (const c of clients) {
+        const [cnt, last] = await Promise.all([
+          supabase
+            .from("leads")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", c.id)
+            .gte("created_at", weekAgo),
+          supabase
+            .from("leads")
+            .select("created_at")
+            .eq("client_id", c.id)
+            .order("created_at", { ascending: false })
+            .limit(1),
+        ]);
+        out[c.id] = {
+          lead7: cnt.count ?? 0,
+          last: (last.data?.[0]?.created_at as string) ?? null,
+        };
+      }
+      setStats(out);
+      setLoading(false);
+    }
+    load();
+  }, [clients]);
+
+  function giorniFa(iso: string | null): string {
+    if (!iso) return "mai";
+    const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+    if (d <= 0) return "oggi";
+    if (d === 1) return "ieri";
+    return d + " gg fa";
+  }
+
+  const Dot = ({ ok }: { ok: boolean }) => (
+    <span style={{ color: ok ? "#16a34a" : "#dc2626", fontWeight: 700 }}>
+      {ok ? "✓" : "✗"}
+    </span>
+  );
+
+  return (
+    <div className="panel">
+      <h2>Stato integrazione</h2>
+      <p style={{ color: "var(--muted)", marginTop: -6 }}>
+        A colpo d'occhio: cosa è collegato e quando è arrivato l'ultimo lead per
+        ogni cliente. Lo stato delle campagne Meta (accese/spente) te lo
+        controllo io da qui in chat.
+      </p>
+      {loading ? (
+        <div style={{ color: "var(--muted)" }}>Caricamento…</div>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Pagina FB</th>
+              <th>Token Meta</th>
+              <th>Ad account</th>
+              <th>Lead ultimi 7 gg</th>
+              <th>Ultimo lead</th>
+            </tr>
+          </thead>
+          <tbody>
+            {clients.map((c) => (
+              <tr key={c.id}>
+                <td><b>{c.name}</b></td>
+                <td><Dot ok={Boolean(c.meta_page_id)} /></td>
+                <td><Dot ok={tokens[c.id] ?? false} /></td>
+                <td><Dot ok={Boolean(c.meta_ad_account_id)} /></td>
+                <td>{stats[c.id]?.lead7 ?? 0}</td>
+                <td>{giorniFa(stats[c.id]?.last ?? null)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+interface IntStat {
+  lead7: number;
+  last: string | null;
+}
+
+/* ---------------- Attività recenti ---------------- */
+interface ActEv {
+  lead_id: string;
+  client_id: string;
+  changed_by: string | null;
+  changed_at: string;
+  from_stage_id: string | null;
+  to_stage_id: string;
+}
+
+function ActivityPanel({ clients }: { clients: Client[] }) {
+  const [rows, setRows] = useState<ActRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      const { data: ev } = await supabase
+        .from("lead_stage_events")
+        .select(
+          "lead_id, client_id, changed_by, changed_at, from_stage_id, to_stage_id"
+        )
+        .order("changed_at", { ascending: false })
+        .limit(200);
+      const events = (ev as ActEv[]) ?? [];
+      const leadIds = [...new Set(events.map((e) => e.lead_id))];
+      const stageIds = [
+        ...new Set(
+          events
+            .flatMap((e) => [e.from_stage_id, e.to_stage_id])
+            .filter((x): x is string => Boolean(x))
+        ),
+      ];
+      const [ld, st] = await Promise.all([
+        leadIds.length
+          ? supabase.from("leads").select("id, name").in("id", leadIds)
+          : Promise.resolve({ data: [] as { id: string; name: string | null }[] }),
+        stageIds.length
+          ? supabase.from("stages").select("id, name").in("id", stageIds)
+          : Promise.resolve({ data: [] as { id: string; name: string | null }[] }),
+      ]);
+      const leadName = new Map((ld.data ?? []).map((l) => [l.id, l.name]));
+      const stageName = new Map((st.data ?? []).map((s) => [s.id, s.name]));
+      const clientName = new Map(clients.map((c) => [c.id, c.name]));
+      setRows(
+        events.map((e) => ({
+          at: e.changed_at,
+          client: clientName.get(e.client_id) ?? "—",
+          lead: leadName.get(e.lead_id) ?? "(eliminato)",
+          move:
+            (e.from_stage_id
+              ? (stageName.get(e.from_stage_id) ?? "—") + " → "
+              : "✨ ingresso → ") + (stageName.get(e.to_stage_id) ?? "—"),
+          by: e.changed_by ?? "—",
+        }))
+      );
+      setLoading(false);
+    }
+    load();
+  }, [clients]);
+
+  return (
+    <div className="panel">
+      <h2>Attività recenti</h2>
+      <p style={{ color: "var(--muted)", marginTop: -6 }}>
+        Chi ha spostato cosa e quando (ultimi 200 movimenti). Il nome di chi
+        agisce viene registrato da oggi in poi.
+      </p>
+      {loading ? (
+        <div style={{ color: "var(--muted)" }}>Caricamento…</div>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Quando</th>
+              <th>Cliente</th>
+              <th>Lead</th>
+              <th>Movimento</th>
+              <th>Chi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {new Date(r.at).toLocaleString("it-IT", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </td>
+                <td>{r.client}</td>
+                <td>{r.lead}</td>
+                <td>{r.move}</td>
+                <td>{r.by}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+interface ActRow {
+  at: string;
+  client: string;
+  lead: string;
+  move: string;
+  by: string;
 }
 
 /* ---------------- Utenti / Segretarie ---------------- */
