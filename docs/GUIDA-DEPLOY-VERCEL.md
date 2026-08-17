@@ -45,9 +45,8 @@ Dopo 1-2 minuti Vercel mostra "🎉 Congratulations" e un indirizzo tipo
 `https://crm-ottica-clienti.vercel.app`.
 
 1. Aprilo.
-2. Accedi con:
-   - Email: **otticaclienti@gmail.com**
-   - Password: **OtticaCRM2026!**
+2. Accedi con il tuo accesso amministratore (email e password che conservi in
+   un posto privato).
 3. Vedrai la bacheca di **Arte Ottica** con i 155 lead. ✅
 
 **Salva quell'indirizzo** e comunicalo alle segretarie (ognuna con il proprio

@@ -19,24 +19,22 @@ richiesta.
    repository.
 3. Lascia tutte le impostazioni come sono (Framework: *Vite*) e clicca
    **Deploy**.
-4. Dopo ~1 minuto avrai l'indirizzo dell'app. Entra con
-   **otticaclienti@gmail.com** / **OtticaCRM2026!**.
+4. Dopo ~1 minuto avrai l'indirizzo dell'app. Entra con il tuo accesso
+   amministratore.
 
 Guida dettagliata con schermate: [`docs/GUIDA-DEPLOY-VERCEL.md`](docs/GUIDA-DEPLOY-VERCEL.md).
 
 ---
 
-## 🔑 I tuoi accessi (da conservare)
+## 🔑 I tuoi accessi
 
-| Cosa | Valore |
-|------|--------|
+| Cosa | Dove |
+|------|------|
 | Indirizzo dell'app | *(lo avrai dopo la pubblicazione su Vercel — vedi guida)* |
-| Login amministratore | **otticaclienti@gmail.com** |
-| Password temporanea | **OtticaCRM2026!** → cambiala al primo accesso |
+| Accesso amministratore | *(da conservare in un posto privato, non qui)* |
 
-> ⚠️ La password è temporanea: entra, vai su una segretaria o chiedi il cambio,
-> e comunque cambiala. (Il cambio password admin si fa dal pannello Supabase o
-> chiedendo a chi ti gestisce il sistema.)
+> ⚠️ Le credenziali NON vanno mai scritte nel repository (è pubblico): tienile
+> in un gestore di password o in un documento privato.
 
 ---
 
@@ -55,7 +53,7 @@ Guida dettagliata con schermate: [`docs/GUIDA-DEPLOY-VERCEL.md`](docs/GUIDA-DEPL
 ## 🚀 Da dove inizio?
 
 1. **Pubblica l'app**: segui [`docs/GUIDA-DEPLOY-VERCEL.md`](docs/GUIDA-DEPLOY-VERCEL.md).
-2. **Entra** con l'accesso amministratore qui sopra.
+2. **Entra** con il tuo accesso amministratore.
 3. Nella **Bacheca** vedrai già il cliente *Arte Ottica* con i **155 lead**
    nelle colonne giuste (importati dal tuo CSV).
 4. **Collega i lead nuovi** da Meta: segui [`docs/GUIDA-N8N-META.md`](docs/GUIDA-N8N-META.md).
