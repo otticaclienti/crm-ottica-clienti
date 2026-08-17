@@ -11,7 +11,11 @@ export const SUPABASE_URL =
 export const SUPABASE_ANON_KEY =
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || DEFAULT_ANON_KEY;
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  // Gestiamo noi il link di recupero password (vedi Login.tsx), così
+  // l'app non consuma da sola il token nell'URL.
+  auth: { detectSessionInUrl: false },
+});
 
 // URL della funzione che gestisce gli utenti (usata solo dall'admin)
 export const ADMIN_FN_URL = `${SUPABASE_URL}/functions/v1/admin-user`;
