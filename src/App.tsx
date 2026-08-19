@@ -178,12 +178,12 @@ export default function App() {
           )}
         </nav>
 
-        {/* Selettore cliente: l'admin sceglie, la segretaria lo vede bloccato */}
+        {/* Selettore cliente: l'admin sceglie tra tutti, la segretaria tra i suoi */}
         {clients.length > 0 && tab !== "admin" && tab !== "performance" && (
           <select
             className="select"
             value={clientId ?? ""}
-            disabled={!isAdmin}
+            disabled={clients.length <= 1}
             onChange={(e) => setClientId(e.target.value)}
           >
             {clients.map((c) => (
