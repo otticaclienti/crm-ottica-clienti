@@ -24,7 +24,8 @@ export default function App() {
   // Ricerca globale: per nome o telefono, su tutti i lead visibili
   useEffect(() => {
     const term = q.trim();
-    if (term.length < 2) {
+    if (term.length < 2 || term.includes(",") || term.includes(")")) {
+      // virgole e parentesi romperebbero il filtro .or(): le ignoriamo
       setQResults([]);
       return;
     }
