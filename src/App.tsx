@@ -118,6 +118,9 @@ export default function App() {
   }
 
   const currentClient = clients.find((c) => c.id === clientId) ?? null;
+  // Tema premium: riservato alle agenzie di marketing (clienti "Estetica").
+  // Gli altri clienti restano sul tema caldo standard.
+  const isPremium = currentClient?.name.startsWith("Estetica") ?? false;
   const isAllView = pipelineId === ALL_PIPELINES_ID;
   // Pipeline sintetica "Totale": esiste solo per la Dashboard.
   const allPipeline: Pipeline | null =
@@ -137,10 +140,10 @@ export default function App() {
   const boardPipeline = isAllView ? pipelines[0] ?? null : currentPipeline;
 
   return (
-    <div className="app">
+    <div className={"app" + (isPremium ? " theme-premium" : "")}>
       <div className="topbar">
         <div className="brand">
-          CRM Ottica <small>· pipeline</small>
+          {isPremium ? "Estetica Premium" : "CRM Ottica"} <small>· pipeline</small>
         </div>
 
         <nav className="nav">

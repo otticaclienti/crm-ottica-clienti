@@ -173,6 +173,14 @@ export default function Board({
       </div>
     );
 
+  const isPremium = client.name.startsWith("Estetica");
+  const total = leads.length;
+  const hot =
+    (leadsByStage[stages.find((s) => s.name === "RECALL")?.id ?? ""] ?? [])
+      .length +
+    (leadsByStage[stages.find((s) => s.name === "NO ANSWER")?.id ?? ""] ?? [])
+      .length;
+
   return (
     <>
       <DndContext
@@ -180,7 +188,33 @@ export default function Board({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
-        <div className="board-wrap">
+        <div className={"board-wrap" + (isPremium ? " premium" : "")}>
+          {isPremium && (
+            <div className="board-header">
+              <div>
+                <div className="board-title">{pipeline.name}</div>
+                <div className="board-sub">
+                  {total} lead · {hot} da lavorare · {stages.length} fasi
+                </div>
+              </div>
+              <div className="board-kpis">
+                <div className="kpi">
+                  <span className="kpi-v">{total}</span>
+                  <span className="kpi-k">lead totali</span>
+                </div>
+                <div className="kpi">
+                  <span className="kpi-v">{hot}</span>
+                  <span className="kpi-k">in lavorazione</span>
+                </div>
+                <div className="kpi">
+                  <span className="kpi-v">
+                    {leadsByStage[stages.find((s) => s.name === "CLOSING")?.id ?? ""]?.length ?? 0}
+                  </span>
+                  <span className="kpi-k">in chiusura</span>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="board">
             {stages.map((s) => (
               <Column
