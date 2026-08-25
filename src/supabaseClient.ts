@@ -20,3 +20,21 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // URL della funzione che gestisce gli utenti (usata solo dall'admin)
 export const ADMIN_FN_URL = `${SUPABASE_URL}/functions/v1/admin-user`;
 export const INGEST_FN_URL = `${SUPABASE_URL}/functions/v1/ingest-lead`;
+
+/**
+ * Legge TUTTE le righe di una query a pagine: PostgREST limita a 1000 righe
+ * per richiesta, quindi le pipeline grandi (1000+ lead) altrimenti si
+ * troncano e i lead spariscono dalla bacheca.
+ */
+export async function fetchAllRows(query: any, pageSize = 1000): Promise<any[]> {
+  const rows: any[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    if (error) throw error;
+    rows.push(...((data as any[]) ?? []));
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return rows;
+}

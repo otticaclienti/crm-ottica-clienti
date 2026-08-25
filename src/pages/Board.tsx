@@ -10,7 +10,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { supabase } from "../supabaseClient";
+import { supabase, fetchAllRows } from "../supabaseClient";
 import type { Client, Lead, Pipeline, Stage } from "../types";
 import LeadModal from "./LeadModal";
 
@@ -46,21 +46,30 @@ export default function Board({
   );
 
   const load = useCallback(async () => {
-    const [{ data: st }, { data: ld }] = await Promise.all([
+    const [st, ld] = await Promise.all([
       supabase
         .from("stages")
         .select("*")
         .eq("pipeline_id", pipeline.id)
         .order("position"),
-      supabase
-        .from("leads")
-        .select("*")
-        .eq("pipeline_id", pipeline.id)
-        .order("position")
-        .order("created_at", { ascending: false }),
+      // Tutti i lead, a pagine: PostgREST tronca a 1000 righe per richiesta.
+      fetchAllRows(
+        supabase
+          .from("leads")
+          .select("*")
+          .eq("pipeline_id", pipeline.id)
+          .order("id")
+      ),
     ]);
-    setStages((st as Stage[]) ?? []);
-    setLeads((ld as Lead[]) ?? []);
+    setStages((st.data as Stage[]) ?? []);
+    // Ordina come prima: posizione (chi è in cima alla colonna) e poi più
+    // recenti in alto — il sort lato client compensa la paginazione.
+    const sorted = (ld as Lead[]).sort(
+      (a, b) =>
+        (a.position ?? 0) - (b.position ?? 0) ||
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    setLeads(sorted);
     setLoading(false);
   }, [pipeline.id]);
 

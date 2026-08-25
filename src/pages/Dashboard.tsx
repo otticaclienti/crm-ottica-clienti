@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { supabase } from "../supabaseClient";
+import { supabase, fetchAllRows } from "../supabaseClient";
 import type { Client, Lead, Pipeline, Stage } from "../types";
 
 interface AdMetrics {
@@ -89,12 +89,12 @@ export default function Dashboard({
     setLoading(true);
     Promise.all([
       supabase.from("stages").select("*").in("pipeline_id", ids).order("position"),
-      supabase.from("leads").select("*").in("pipeline_id", ids),
+      fetchAllRows(supabase.from("leads").select("*").in("pipeline_id", ids).order("id")),
       supabase.from("client_ad_metrics").select("*").in("pipeline_id", ids),
       supabase.from("ad_metrics_monthly").select("*").in("pipeline_id", ids).order("month", { ascending: false }),
-    ]).then(([{ data: st }, { data: ld }, { data: adm }, { data: mm }]) => {
+    ]).then(([{ data: st }, ld, { data: adm }, { data: mm }]) => {
       setStages((st as Stage[]) ?? []);
-      setLeads((ld as Lead[]) ?? []);
+      setLeads(ld as Lead[]);
       setAds(aggregateAds((adm as AdMetrics[]) ?? []));
       setMonths(aggregateMonths((mm as MonthRow[]) ?? []));
       setLoading(false);
