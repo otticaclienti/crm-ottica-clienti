@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { supabase } from "../supabaseClient";
+import { supabase, fetchAllRows } from "../supabaseClient";
 import type { Client } from "../types";
 
 interface LeadRow {
@@ -33,8 +33,15 @@ export default function Performance({ clients }: { clients: Client[] }) {
     setLoading(true);
     Promise.all([
       supabase.from("stages").select("id,client_id,name"),
-      supabase.from("leads").select("assigned_to,client_id,stage_id,value"),
-    ]).then(([{ data: st }, { data: ld }]) => {
+      // Tutti i lead a pagine: PostgREST tronca a 1000 righe per richiesta,
+      // altrimenti oltre i 1000 lead totali le performance vengono sotto-contate.
+      fetchAllRows(
+        supabase
+          .from("leads")
+          .select("assigned_to,client_id,stage_id,value")
+          .order("id")
+      ),
+    ]).then(([{ data: st }, ld]) => {
       setStages((st as StageRow[]) ?? []);
       setLeads((ld as LeadRow[]) ?? []);
       setLoading(false);
