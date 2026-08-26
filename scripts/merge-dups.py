@@ -62,17 +62,21 @@ def main() -> None:
         q = f"""
         with entry as (select id as eid from stages where pipeline_id = '{pid}' and is_entry),
         normleads as (
-          select l.id as lid, l.stage_id as stid, public.norm_phone(l.phone) as np
+          select l.id as lid, l.stage_id as stid, l.created_at as cat,
+                 public.norm_phone(l.phone) as np
           from leads l where l.pipeline_id = '{pid}'
         ),
         worked as (
+          -- Solo lead lavorati di RECENTE (ultimi 30 gg): cosi' chi ricontatta
+          -- dopo mesi non viene scambiato per un doppione e resta in bacheca.
           select n.np, min(n.lid::text)::uuid as wid from normleads n
-          where n.stid <> (select eid from entry)
+          where n.stid <> (select eid from entry) and n.np is not null and n.np <> ''
+            and n.cat >= now() - interval '30 days'
           group by n.np
         ),
         dups as (
           select n.lid from normleads n join worked w on w.np = n.np
-          where n.stid = (select eid from entry)
+          where n.stid = (select eid from entry) and n.np is not null and n.np <> ''
         )
         delete from lead_stage_events where lead_id in (select lid from dups);
         """
