@@ -6,6 +6,7 @@ interface Props {
   lead?: Lead;
   newInStage?: Stage;
   clientId?: string;
+  pipelineId?: string;
   stages: Stage[];
   meName?: string;
   onClose: () => void;
@@ -16,6 +17,7 @@ export default function LeadModal({
   lead,
   newInStage,
   clientId,
+  pipelineId,
   stages,
   meName,
   onClose,
@@ -25,8 +27,10 @@ export default function LeadModal({
   const [name, setName] = useState(lead?.name ?? "");
   const [phone, setPhone] = useState(lead?.phone ?? "");
   const [email, setEmail] = useState(lead?.email ?? "");
-  const [source, setSource] = useState(lead?.source ?? "Facebook");
-  const [assigned, setAssigned] = useState(lead?.assigned_to ?? "");
+  const [source, setSource] = useState(lead?.source ?? "Manuale");
+  const [assigned, setAssigned] = useState(
+    lead?.assigned_to ?? (isNew ? meName?.trim() ?? "" : "")
+  );
   const [value, setValue] = useState(String(lead?.value ?? 0));
   const [stageId, setStageId] = useState(
     lead?.stage_id ?? newInStage?.id ?? stages[0]?.id
@@ -36,8 +40,16 @@ export default function LeadModal({
   const [err, setErr] = useState<string | null>(null);
 
   async function save() {
-    setBusy(true);
     setErr(null);
+    if (!name.trim()) {
+      setErr("Inserisci il nome del lead.");
+      return;
+    }
+    if (!stageId) {
+      setErr("Seleziona una fase della pipeline.");
+      return;
+    }
+    setBusy(true);
     const payload = {
       name: name.trim() || null,
       phone: phone.trim() || null,
@@ -53,7 +65,7 @@ export default function LeadModal({
     if (isNew) {
       const res = await supabase
         .from("leads")
-        .insert({ ...payload, client_id: clientId })
+        .insert({ ...payload, client_id: clientId, pipeline_id: pipelineId })
         .select("id")
         .single();
       error = res.error;
@@ -99,7 +111,7 @@ export default function LeadModal({
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <header>
-          <h3>{isNew ? "Nuovo lead" : name || "Lead"}</h3>
+          <h3>{isNew ? "Aggiungi lead manualmente" : name || "Lead"}</h3>
           <button className="x" onClick={onClose}>
             ×
           </button>
@@ -109,7 +121,12 @@ export default function LeadModal({
 
           <div className="field">
             <label>Nome</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nome e cognome"
+              autoFocus={isNew}
+            />
           </div>
           <div style={{ display: "flex", gap: 12 }}>
             <div className="field" style={{ flex: 1 }}>

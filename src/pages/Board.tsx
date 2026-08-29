@@ -189,6 +189,7 @@ export default function Board({
       .length +
     (leadsByStage[stages.find((s) => s.name === "NO ANSWER")?.id ?? ""] ?? [])
       .length;
+  const entryStage = stages.find((s) => s.is_entry) ?? stages[0];
 
   return (
     <>
@@ -198,6 +199,20 @@ export default function Board({
         onDragEnd={onDragEnd}
       >
         <div className={"board-wrap" + (isPremium ? " premium" : "")}>
+          {!isPremium && <div className="board-actions">
+            <div>
+              <div className="board-title">{pipeline.name}</div>
+              <div className="board-sub">{total} lead · {stages.length} fasi</div>
+            </div>
+            {canEdit && entryStage && (
+              <button
+                className="btn primary"
+                onClick={() => setCreatingInStage(entryStage)}
+              >
+                + Nuovo lead manuale
+              </button>
+            )}
+          </div>}
           {isPremium && (
             <div className="board-header">
               <div>
@@ -206,21 +221,28 @@ export default function Board({
                   {total} lead · {hot} da lavorare · {stages.length} fasi
                 </div>
               </div>
-              <div className="board-kpis">
-                <div className="kpi">
-                  <span className="kpi-v">{total}</span>
-                  <span className="kpi-k">lead totali</span>
+              <div className="board-header-actions">
+                <div className="board-kpis">
+                  <div className="kpi">
+                    <span className="kpi-v">{total}</span>
+                    <span className="kpi-k">lead totali</span>
+                  </div>
+                  <div className="kpi">
+                    <span className="kpi-v">{hot}</span>
+                    <span className="kpi-k">in lavorazione</span>
+                  </div>
+                  <div className="kpi">
+                    <span className="kpi-v">
+                      {leadsByStage[stages.find((s) => s.name === "CLOSING")?.id ?? ""]?.length ?? 0}
+                    </span>
+                    <span className="kpi-k">in chiusura</span>
+                  </div>
                 </div>
-                <div className="kpi">
-                  <span className="kpi-v">{hot}</span>
-                  <span className="kpi-k">in lavorazione</span>
-                </div>
-                <div className="kpi">
-                  <span className="kpi-v">
-                    {leadsByStage[stages.find((s) => s.name === "CLOSING")?.id ?? ""]?.length ?? 0}
-                  </span>
-                  <span className="kpi-k">in chiusura</span>
-                </div>
+                {canEdit && entryStage && (
+                  <button className="btn primary" onClick={() => setCreatingInStage(entryStage)}>
+                    + Nuovo lead manuale
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -257,6 +279,7 @@ export default function Board({
         <LeadModal
           newInStage={creatingInStage}
           clientId={client.id}
+          pipelineId={pipeline.id}
           stages={stages}
           meName={meName}
           onClose={() => setCreatingInStage(null)}
